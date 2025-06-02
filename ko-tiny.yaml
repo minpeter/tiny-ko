@@ -1,0 +1,47 @@
+base_model: ./tiny-random
+model_type: AutoModelForCausalLM
+tokenizer_type: AutoTokenizer
+
+# trust_remote_code: true
+# random_init_weights: true
+
+hub_model_id: minpeter/pretrained-tiny-ko
+output_dir: ./ouputs/pretrained-tiny-ko
+wandb_project: "axolotl"
+wandb_entity: "kasfiekfs-e"
+
+# resume_from_checkpoint: ./ouputs/pretrained-tiny-ko
+# auto_resume_from_checkpoints: false
+
+gradient_accumulation_steps: 4
+micro_batch_size: 16
+
+pretraining_dataset:
+  - path: wikimedia/wikipedia
+    name: 20231101.ko
+    text_column: text
+    type: pretrain
+
+val_set_size: 0.05
+sequence_len: 2048
+learning_rate: 1e-3
+
+max_steps: 648000
+save_steps: 1000
+eval_steps: 2000
+warmup_steps: 100
+
+optimizer: adamw_torch_fused
+flash_attention: true
+fsdp:
+  - full_shard
+fsdp_config:
+  sharding_strategy: FULL_SHARD
+  min_num_params: 100000000
+  mixed_precision: true
+  backward_prefetch: BACKWARD_PRE
+  limit_all_gathers: true
+  cpu_offload: false
+  sync_module_states: true
+  auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  use_orig_params: true
