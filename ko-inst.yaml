@@ -57,7 +57,7 @@ added_tokens_overrides:
   128002: "<|im_start|>"
 
 special_tokens:
-  bos_token: <|im_start|>
+  bos_token: <|begin_of_text|>
   eos_token: <|im_end|>
   pad_token: <|im_end|>
 
