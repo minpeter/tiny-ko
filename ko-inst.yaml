@@ -18,7 +18,52 @@ datasets:
       role: role
       content: content
 
+  - path: heegyu/open-korean-instructions-v20231020
+    type: chat_template
+    split: train[:20%]
+    field_messages: conversations
+    message_property_mappings:
+      role: from
+      content: value
+    roles:
+      user: ["human", "user"]
+      assistant: ["gpt", "assistant", "bot"]
+      system: ["system", "input"]
+
+  # NOTE: https://github.com/FreedomIntelligence/MultilingualSIFT
+  - path: FreedomIntelligence/evol-instruct-korean
+    type: chat_template
+    split: train[:20%]
+    field_messages: conversations
+    message_property_mappings:
+      role: from
+      content: value
+
   - path: FreedomIntelligence/alpaca-gpt4-korean
+    type: chat_template
+    split: train[:20%]
+    field_messages: conversations
+    message_property_mappings:
+      role: from
+      content: value
+
+  - path: FreedomIntelligence/sharegpt-korean
+    type: chat_template
+    split: train[:20%]
+    field_messages: conversations
+    message_property_mappings:
+      role: from
+      content: value
+
+  - path: coastral/korean-writing-style-instruct
+    type: chat_template
+    split: train[:20%]
+    field_messages: conversations
+    message_property_mappings:
+      role: from
+      content: value
+
+  - path: devngho/korean-instruction-mix
     type: chat_template
     split: train[:20%]
     field_messages: conversations
@@ -68,5 +113,5 @@ resume_from_checkpoint:
 logging_steps: 1
 flash_attention: true
 
-num_epochs: 4
+num_epochs: 3
 weight_decay: 0.0
