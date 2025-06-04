@@ -1,6 +1,6 @@
 base_model: minpeter/pretrained-tiny-ko
 
-chat_template: tokenizer_default_fallback_chatml
+chat_template: chatml
 datasets:
   - path: lemon-mint/Korean-FineTome-100k
     type: chat_template
@@ -9,6 +9,7 @@ datasets:
     message_property_mappings:
       role: role
       content: content
+
   - path: lemon-mint/smol-koreantalk
     type: chat_template
     split: train[:20%]
@@ -16,6 +17,15 @@ datasets:
     message_property_mappings:
       role: role
       content: content
+
+  - path: FreedomIntelligence/alpaca-gpt4-korean
+    type: chat_template
+    split: train[:20%]
+    field_messages: conversations
+    message_property_mappings:
+      role: from
+      content: value
+
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.05
 
@@ -24,12 +34,16 @@ output_dir: ./ouputs/ko-tiny-exp
 wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
 
-sequence_len: 2048
+save_steps: 200
+warmup_steps: 100
+eval_steps: 200
+
+sequence_len: 512
 sample_packing: true
 pad_to_sequence_len: true
 
 gradient_accumulation_steps: 4
-micro_batch_size: 16
+micro_batch_size: 56
 
 optimizer: paged_adamw_8bit
 lr_scheduler: cosine
@@ -38,6 +52,15 @@ learning_rate: 2e-5
 bf16: auto
 tf32: false
 
+added_tokens_overrides:
+  128001: "<|im_end|>"
+  128002: "<|im_start|>"
+
+special_tokens:
+  bos_token: <|im_start|>
+  eos_token: <|im_end|>
+  pad_token: <|im_end|>
+
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: false
@@ -45,8 +68,5 @@ resume_from_checkpoint:
 logging_steps: 1
 flash_attention: true
 
-warmup_steps: 100
-num_epochs: 2
-evals_per_epoch: 2
-saves_per_epoch: 1
+num_epochs: 4
 weight_decay: 0.0
