@@ -66,7 +66,7 @@ datasets:
   - path: devngho/korean-instruction-mix
     type: chat_template
     split: train[:20%]
-    field_messages: conversations
+    field_messages: messages
     message_property_mappings:
       role: from
       content: value
