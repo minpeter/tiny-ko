@@ -4,7 +4,7 @@ chat_template: chatml
 datasets:
   - path: lemon-mint/Korean-FineTome-100k
     type: chat_template
-    split: train[:20%]
+    split: train[:10%]
     field_messages: messages
     message_property_mappings:
       role: role
@@ -12,7 +12,7 @@ datasets:
 
   - path: lemon-mint/smol-koreantalk
     type: chat_template
-    split: train[:20%]
+    split: train[:10%]
     field_messages: messages
     message_property_mappings:
       role: role
@@ -20,7 +20,7 @@ datasets:
 
   - path: heegyu/open-korean-instructions-v20231020
     type: chat_template
-    split: train[:20%]
+    split: train[:10%]
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -33,7 +33,7 @@ datasets:
   # NOTE: https://github.com/FreedomIntelligence/MultilingualSIFT
   - path: FreedomIntelligence/evol-instruct-korean
     type: chat_template
-    split: train[:20%]
+    split: train[:10%]
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -41,7 +41,7 @@ datasets:
 
   - path: FreedomIntelligence/alpaca-gpt4-korean
     type: chat_template
-    split: train[:20%]
+    split: train[:10%]
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -49,7 +49,7 @@ datasets:
 
   - path: FreedomIntelligence/sharegpt-korean
     type: chat_template
-    split: train[:20%]
+    split: train[:10%]
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -57,7 +57,7 @@ datasets:
 
   - path: coastral/korean-writing-style-instruct
     type: chat_template
-    split: train[:20%]
+    split: train[:10%]
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -65,7 +65,7 @@ datasets:
 
   - path: devngho/korean-instruction-mix
     type: chat_template
-    split: train[:20%]
+    split: train[:10%]
     field_messages: messages
     message_property_mappings:
       role: from
@@ -80,15 +80,20 @@ wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
 
 save_steps: 200
-warmup_steps: 100
+warmup_steps: 20
 eval_steps: 200
 
 sequence_len: 512
-sample_packing: true
+
+# <<<< experimental settings <<<<
+sample_packing: false
+train_on_inputs: true
+# >>>> experimental settings >>>
+
 pad_to_sequence_len: true
 
 gradient_accumulation_steps: 4
-micro_batch_size: 56
+micro_batch_size: 64
 
 optimizer: paged_adamw_8bit
 lr_scheduler: cosine
