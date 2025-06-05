@@ -195,6 +195,7 @@ hub_id = "minpeter/pretrain-tiny-ko-eos" # 실제 Hugging Face Hub ID로 변경
 
 # 학습 전 토크나이저 저장
 tokenizer.save_pretrained(output_dir_name)
+tokenizer.push_to_hub(hub_id) # 실제 Hub에 업로드 시 활성화
 print(f"토크나이저가 '{output_dir_name}'에 저장되었습니다.")
 
 args = TrainingArguments(
