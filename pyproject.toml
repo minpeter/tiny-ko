@@ -14,5 +14,8 @@ dependencies = [
     "scikit-learn>=1.6.1",
     "sentencepiece>=0.2.0",
     "torch>=2.7.0",
+    "torchaudio>=2.7.1",
+    "torchvision>=0.22.1",
     "transformers>=4.52.4",
+    "wandb>=0.20.1",
 ]
