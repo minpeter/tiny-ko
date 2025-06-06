@@ -111,8 +111,8 @@ def compute_metrics(eval_preds):
 
 data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 
-hf_model_id = "minpeter/pretrained-tiny-ko"
-local_model_path = "model/pretrained-tiny-ko"
+hf_model_id = "minpeter/tiny-ko-pretrained"
+local_model_path = "model/tiny-ko-pretrained"
 
 tokenizer.save_pretrained(local_model_path)
 tokenizer.push_to_hub(hf_model_id)

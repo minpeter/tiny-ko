@@ -1,4 +1,4 @@
-base_model: minpeter/pretrained-tiny-ko
+base_model: minpeter/tiny-ko-pretrained
 
 chat_template: chatml
 datasets:
@@ -74,7 +74,7 @@ datasets:
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.05
 
-hub_model_id: minpeter/ko-tiny-exp
+hub_model_id: minpeter/tiny-ko-sft
 output_dir: ./ouputs/ko-tiny-exp
 wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
