@@ -1,0 +1,40 @@
+base_model: minpeter/tiny-ko-sft
+
+hub_model_id: minpeter/tiny-ko-dpo
+output_dir: ./outputs/ko-tiny-dpo
+wandb_project: "axolotl"
+wandb_entity: "kasfiekfs-e"
+
+chat_template: chatml
+rl: dpo
+datasets:
+  - path: kuotient/orca-math-korean-dpo-pairs
+    split: train
+    type: chatml.intel
+
+dataset_prepared_path:
+val_set_size: 0.0
+
+sequence_len: 2048
+sample_packing: false
+pad_to_sequence_len: true
+
+gradient_accumulation_steps: 4
+micro_batch_size: 2
+num_epochs: 4
+optimizer: adamw_bnb_8bit
+lr_scheduler: cosine
+learning_rate: 0.0002
+
+bf16: auto
+tf32: false
+
+gradient_checkpointing: true
+resume_from_checkpoint:
+logging_steps: 1
+flash_attention: true
+
+warmup_steps: 10
+evals_per_epoch: 4
+save_steps: 200
+weight_decay: 0.0
