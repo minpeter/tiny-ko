@@ -1,19 +1,16 @@
 base_model: minpeter/tiny-ko-sft
 
-hub_model_id: minpeter/tiny-ko-sft2
-output_dir: ./outputs/tiny-ko-sft2
+hub_model_id: minpeter/tiny-ko-tool
+output_dir: ./outputs/tiny-ko-tool
 wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
 
 chat_template: chatml
 datasets:
-  - path: exp-models/dolphin-r1-korean-deepseek-toolcalls
+  - path: minpeter/ko-fc-1k
     type: chat_template
     split: train[:10%]
     field_messages: messages
-    message_property_mappings:
-      role: role
-      content: translated_content
 
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.05
@@ -40,6 +37,12 @@ learning_rate: 1e-3
 
 bf16: auto
 tf32: false
+
+added_tokens_overrides:
+  128003: "<tool_call>"
+  128004: "</tool_call>"
+  128005: "<think>"
+  128006: "</think>"
 
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
