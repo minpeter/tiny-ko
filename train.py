@@ -15,20 +15,13 @@ ds = load_dataset('minpeter/tiny-ko-corpus', split='train')
 ds = ds.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
 print(ds)
 
-context_length = 2048
+context_length = 4096
 max_cpu_count = int(os.cpu_count() / 3) or 1
 
-tokenizer = AutoTokenizer.from_pretrained("kakaocorp/kanana-nano-2.1b-base")
-
-if tokenizer.eos_token is None:
-    raise ValueError("토크나이저에 EOS 토큰이 정의되어 있지 않습니다. 모델을 학습하기 전에 EOS 토큰을 설정해야 합니다.")
-if tokenizer.pad_token is None:
-    print("토크나이저에 PAD 토큰이 정의되어 있지 않아 EOS 토큰을 PAD 토큰으로 사용합니다.")
-    tokenizer.pad_token = tokenizer.eos_token
+tokenizer = AutoTokenizer.from_pretrained("./tknz/tiny-ko-tokenizer")
 
 print(f"사용될 EOS 토큰: '{tokenizer.eos_token}', ID: {tokenizer.eos_token_id}")
-print(f"사용될 BOS 토큰: '{tokenizer.bos_token}', ID: {tokenizer.bos_token_id}")
-print(f"사용될 PAD 토큰: '{tokenizer.pad_token}', ID: {tokenizer.pad_token_id}") # 이제 EOS 토큰과 동일하거나, 원래 PAD 토큰 값
+print(f"사용될 PAD 토큰: '{tokenizer.pad_token}', ID: {tokenizer.pad_token_id}")
 
 def append_eos_to_text(examples):
     processed_texts = [text + tokenizer.eos_token for text in examples['text']]
@@ -78,7 +71,7 @@ config = AutoConfig.from_pretrained(
     "HuggingFaceTB/SmolLM2-135M",
     vocab_size=len(tokenizer),    # EOS 또는 다른 토큰 추가로 인해 tokenizer 길이가 변경되었을 수 있음
     max_position_embeddings=context_length,
-    bos_token_id=tokenizer.bos_token_id,
+    # bos_token_id=tokenizer.bos_token_id,
     eos_token_id=tokenizer.eos_token_id, # 위에서 설정된 tokenizer.eos_token_id 사용
     pad_token_id=tokenizer.pad_token_id, # 위에서 설정된 tokenizer.pad_token_id 사용 (eos_token_id와 같을 수 있음)
 )

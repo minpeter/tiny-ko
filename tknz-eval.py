@@ -109,25 +109,51 @@ def evaluate_tokenizer(tokenizer_path: str, dataset_name: str, dataset_split: st
     # 텍스트를 토큰화(인코딩)했다가 다시 텍스트로 복원(디코딩)했을 때, 원본 정보가 손실되지 않는지 확인합니다.
     # "Round-trip consistency"라고도 부릅니다.
     print("\n[3. 가역성(Reversibility) 테스트]")
-    test_sentence = "안녕하세요! 2024년에도 LLM 만들기는 재밌네요. 😂"
+    test_sentences = [
+        "이것은 토크나이저 가역성 테스트 문장입니다.",
+        "챗지피티와 함께하는 자연어처리 실습.",
+        "Python은 정말 강력한 프로그래밍 언어입니다.",
+        "데이터 과학과 인공지능의 미래는 밝다!",
+        "아버지가방에들어가신다",
+        "한글과 영어가 섞인 문장입니다. Hello, world!",
 
-    # 1. 원본 문장을 토큰 ID 리스트로 인코딩합니다. (특수 토큰 제외)
-    original_ids = tokenizer.encode(test_sentence, add_special_tokens=False)
-    # 2. 인코딩된 ID 리스트를 다시 텍스트로 디코딩합니다.
-    decoded_text = tokenizer.decode(original_ids)
-    # 3. 디코딩된 텍스트를 다시 인코딩합니다.
-    re_encoded_ids = tokenizer.encode(decoded_text, add_special_tokens=False)
+        # 영어 문장
+        "This is a test sentence for the tokenizer.",
+        "Let's see how well it handles different languages.",
+        "The quick brown fox jumps over the lazy dog.",
 
-    print(f"  - 원본 문장: {test_sentence}")
-    print(f"  - 디코딩된 텍스트: {decoded_text}")
+        # 코드
+        "def hello_world():\n    print('Hello, World!')",
+        "import numpy as np\n\n# NumPy 배열 생성\narr = np.array([1, 2, 3, 4, 5])",
+        "class Tokenizer:\n    def __init__(self):\n        pass\n\n    def tokenize(self, text):\n        return text.split()",
+        '{"name": "ChatGPT", "version": "4.0", "features": ["NLP", "AI", "ML"]}',
+        "<tool_call>\n{\"name\": \"similar_string\", \"arguments\": {\"str1\": \"kitten\", \"str2\": \"sitting\", \"error_limit\": 3}}\n</tool_call>\n<tool_call>\n{\"name\": \"similar_string\", \"arguments\": {\"str1\": \"hello\", \"str2\": \"world\", \"error_limit\": 1}}\n</tool_call>",
+        "You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools: <tools> {\"type\": \"function\", \"function\": {\"name\": \"distance_to_miles\", \"description\": \"distance_to_miles(meters: float) - Converts a distance measured in meters to miles.\n\n Args:\n meters(float): The distance in meters to be converted.\", \"parameters\": {\"additionalProperties\": false, \"properties\": {\"meters\": {\"description\": \"The distance in meters to be converted.\", \"type\": \"number\"}}, \"required\": [\"meters\"], \"type\": \"object\"}}\n{\"type\": \"function\", \"function\": {\"name\": \"similar_string\", \"description\": \"similar_string(str1: str, str2: str, error_limit: int) - Checks if two strings are similar within the specified error limit.\n\n Args:\n str1(str): The first string to compare. str2(str): The second string to compare. error_limit(int): The maximum allowed difference between the strings.\", \"parameters\": {\"additionalProperties\": false, \"properties\": {\"error_limit\": {\"description\": \"The maximum allowed difference between the strings.\", \"type\": \"integer\"}, \"str1\": {\"description\": \"The first string to compare.\", \"type\": \"string\"}, \"str2\": {\"description\": \"The second string to compare.\", \"type\": \"string\"}}, \"required\": [\"str1\", \"str2\", \"error_limit\"], \"type\": \"object\"}}\n{\"type\": \"function\", \"function\": {\"name\": \"format_list_of_objects\", \"description\": \"format_list_of_objects(objects: list) - Converts a list of objects into a formatted string.\n\nEach object is converted to a string and separated by commas.\nIf the object is a string, it is surrounded by single quotes.\nIf the object is a number, it is not surrounded by quotes.\n\n Args:\n objects(list): A list of objects to be formatted.\", \"parameters\": {\"additionalProperties\": false, \"properties\": {\"objects\": {\"description\": \"A list of objects to be formatted.\", \"items\": {\"type\": [\"integer\", \"number\", \"string\"]}, \"type\": \"array\"}}, \"required\": [\"objects\"], \"type\": \"object\"}} </tools>Use the following pydantic model json schema for each tool call you will make: {\"properties\": {\"name\": {\"title\": \"Name\", \"type\": \"string\"}, \"arguments\": {\"title\": \"Arguments\", \"type\": \"object\"}}, \"required\": [\"name\", \"arguments\"], \"title\": \"FunctionCall\", \"type\": \"object\"}}\nFor each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-dict>}\n</tool_call>",
+        "https://huggingface.co/dataset/minpeter/tiny-ko-corpus",
 
-    # 4. 원본 ID와 재인코딩된 ID가 완전히 일치하는지 비교합니다.
-    if original_ids == re_encoded_ids:
-        print("  - 결과: ✅ 완벽하게 복원되었습니다 (Round-trip consistency 통과).")
-    else:
-        print("  - 결과: ❌ 복원 실패! ID가 일치하지 않습니다.")
-        print(f"    - 원본 ID: {original_ids}")
-        print(f"    - 재인코딩 ID: {re_encoded_ids}")
+        # mixed emojis and special characters
+        "이모지 😊와 특수 문자 #, @, !, $가 섞인 문장입니다.",
+        "이 문장은 다양한 특수 문자와 이모지를 포함하고 있습니다! 😊 #Python @AI $DataScience",
+    ]
+
+    for idx, test_sentence in enumerate(test_sentences, 1):
+        # 1. 원본 문장을 토큰 ID 리스트로 인코딩합니다. (특수 토큰 제외)
+        original_ids = tokenizer.encode(test_sentence, add_special_tokens=False)
+        # 2. 인코딩된 ID 리스트를 다시 텍스트로 디코딩합니다.
+        decoded_text = tokenizer.decode(original_ids)
+        # 3. 디코딩된 텍스트를 다시 인코딩합니다.
+        re_encoded_ids = tokenizer.encode(decoded_text, add_special_tokens=False)
+
+        print(f"\n  [{idx}] 원본 문장: {test_sentence}")
+        print(f"      디코딩된 텍스트: {decoded_text}")
+
+        # 4. 원본 ID와 재인코딩된 ID가 완전히 일치하는지 비교합니다.
+        if original_ids == re_encoded_ids:
+            print("      결과: ✅ 완벽하게 복원되었습니다 (Round-trip consistency 통과).")
+        else:
+            print("      결과: ❌ 복원 실패! ID가 일치하지 않습니다.")
+            print(f"        - 원본 ID: {original_ids}")
+            print(f"        - 재인코딩 ID: {re_encoded_ids}")
 
 
     print("\n" + "=" * 50)
@@ -139,7 +165,7 @@ if __name__ == "__main__":
     # 사용자가 자신의 환경에 맞게 수정해야 할 부분입니다.
 
     # 평가할 토크나이저의 경로 (로컬 경로 또는 Hugging Face Hub 경로)
-    TOKENIZER_PATH = "/data/minpeter/github.com/minpeter/mirco-ko-llama/tknz/my_llm_tokenizer_for_hf"
+    TOKENIZER_PATH = "./tknz/tiny-ko-tokenizer"
     # 평가에 사용할 데이터셋의 Hugging Face Hub 경로
     DATASET_NAME = "minpeter/tiny-ko-corpus"
     # 사용할 데이터셋의 종류 (예: 'train', 'validation', 'test')
