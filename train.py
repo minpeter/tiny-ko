@@ -11,7 +11,7 @@ from transformers import (
 )
 from datasets import load_dataset
 
-ds = load_dataset('minpeter/pretrain-korean-dedup', split='train')
+ds = load_dataset('minpeter/tiny-ko-corpus', split='train')
 ds = ds.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
 print(ds)
 

@@ -18,7 +18,7 @@ def train_and_save_huggingface_tokenizer():
     # -----------------------------------------------------------------------------
     # STEP 1 ~ 3: 이전과 동일
     # -----------------------------------------------------------------------------
-    dataset = load_dataset("minpeter/pretrain-korean-dedup", split='train[:1000]')
+    dataset = load_dataset("minpeter/tiny-ko-corpus", split='train[:1000]')
     
     print("✅ 데이터셋 로드 완료")
     print(dataset)

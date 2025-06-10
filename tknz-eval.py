@@ -141,7 +141,7 @@ if __name__ == "__main__":
     # 평가할 토크나이저의 경로 (로컬 경로 또는 Hugging Face Hub 경로)
     TOKENIZER_PATH = "/data/minpeter/github.com/minpeter/mirco-ko-llama/tknz/my_llm_tokenizer_for_hf"
     # 평가에 사용할 데이터셋의 Hugging Face Hub 경로
-    DATASET_NAME = "minpeter/pretrain-korean-dedup"
+    DATASET_NAME = "minpeter/tiny-ko-corpus"
     # 사용할 데이터셋의 종류 (예: 'train', 'validation', 'test')
     DATASET_SPLIT = "train"
     # 정량 평가에 사용할 샘플의 개수
