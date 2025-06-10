@@ -111,8 +111,8 @@ def compute_metrics(eval_preds):
 
 data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 
-hf_model_id = "minpeter/tiny-ko-pretrained"
-local_model_path = "model/tiny-ko-pretrained"
+hf_model_id = "minpeter/tiny-ko-base"
+local_model_path = "model/tiny-ko-base"
 
 tokenizer.save_pretrained(local_model_path)
 tokenizer.push_to_hub(hf_model_id)
@@ -133,7 +133,7 @@ args = TrainingArguments(
     per_device_eval_batch_size=8,
 
     logging_steps=5,
-    num_train_epochs=2,
+    num_train_epochs=1,
     weight_decay=0.1,
     warmup_steps=1_000,
     lr_scheduler_type="cosine",

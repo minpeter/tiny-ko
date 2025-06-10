@@ -1,4 +1,4 @@
-base_model: minpeter/pretrained-tiny-ko
+base_model: minpeter/tiny-ko-base
 
 hub_model_id: minpeter/tiny-ko-sft
 output_dir: ./outputs/tiny-ko-sft
@@ -75,6 +75,22 @@ datasets:
     message_property_mappings:
       role: from
       content: value
+
+  - path: youjunhyeok/Magpie-Pro-300K-Filtered-ko
+    type: chat_template
+    split: train[:10%]
+    field_messages: conversations
+    message_property_mappings:
+      role: from
+      content: value
+
+  - path: youjunhyeok/smoltalk-ko-translate
+    type: chat_template
+    name: merge_filtered
+    field_messages: conversations
+    message_property_mappings:
+      role: role
+      content: content
 
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.05
