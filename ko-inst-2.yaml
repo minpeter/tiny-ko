@@ -1,0 +1,52 @@
+base_model: minpeter/tiny-ko-sft
+
+hub_model_id: minpeter/tiny-ko-sft2
+output_dir: ./outputs/tiny-ko-sft2
+wandb_project: "axolotl"
+wandb_entity: "kasfiekfs-e"
+
+chat_template: chatml
+datasets:
+  - path: exp-models/dolphin-r1-korean-deepseek-toolcalls
+    type: chat_template
+    split: train[:10%]
+    field_messages: messages
+    message_property_mappings:
+      role: role
+      content: translated_content
+
+dataset_prepared_path: last_run_prepared
+val_set_size: 0.05
+
+save_steps: 200
+warmup_steps: 20
+eval_steps: 200
+
+sequence_len: 2048
+
+# <<<< experimental settings <<<<
+sample_packing: false
+train_on_inputs: true
+# >>>> experimental settings >>>
+
+pad_to_sequence_len: true
+
+gradient_accumulation_steps: 4
+micro_batch_size: 16
+
+optimizer: paged_adamw_8bit
+lr_scheduler: cosine
+learning_rate: 1e-3
+
+bf16: auto
+tf32: false
+
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+resume_from_checkpoint:
+logging_steps: 1
+flash_attention: true
+
+num_epochs: 3
+weight_decay: 0.0
