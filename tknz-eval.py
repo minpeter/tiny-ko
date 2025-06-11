@@ -84,6 +84,7 @@ def evaluate_tokenizer(tokenizer_path: str, dataset_name: str, dataset_split: st
         "대한민국", "데이터사이언티스트", "딥러닝", "인공지능",
         "아버지가방에들어가신다", "챗지피티", "인스타그램", "유튜브",
         "Hello, World!", "Python", "TensorFlow", "PyTorch",
+        "입니다", ". 학생 여러분.",
     ]
 
     for word in sample_words:
