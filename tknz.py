@@ -4,7 +4,8 @@ from tokenizers import Tokenizer, models, normalizers, pre_tokenizers, decoders,
 from transformers import PreTrainedTokenizerFast, AutoTokenizer
 
 def train_and_save_huggingface_tokenizer():
-    dataset = load_dataset("minpeter/tiny-ko-corpus", split='train[:50000]')
+    # dataset = load_dataset("minpeter/tiny-ko-corpus", split='train[:50000]')
+    dataset = load_dataset("minpeter/tiny-ko-corpus", split='train')
     
     print("✅ 데이터셋 로드 완료")
     print(dataset)

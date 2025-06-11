@@ -99,11 +99,11 @@ save_steps: 200
 warmup_steps: 20
 eval_steps: 200
 
-sequence_len: 2048
+sequence_len: 4096
 
 # <<<< experimental settings <<<<
-sample_packing: false
-train_on_inputs: true
+sample_packing: true
+train_on_inputs: false
 # >>>> experimental settings >>>
 
 pad_to_sequence_len: true
@@ -118,15 +118,6 @@ learning_rate: 1e-3
 bf16: auto
 tf32: false
 
-added_tokens_overrides:
-  128001: "<|im_end|>"
-  128002: "<|im_start|>"
-
-special_tokens:
-  bos_token: <|begin_of_text|>
-  eos_token: <|im_end|>
-  pad_token: <|im_end|>
-
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: false
@@ -134,5 +125,5 @@ resume_from_checkpoint:
 logging_steps: 1
 flash_attention: true
 
-num_epochs: 3
+num_epochs: 1
 weight_decay: 0.0
