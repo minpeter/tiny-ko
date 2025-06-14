@@ -109,7 +109,7 @@ train_on_inputs: false
 pad_to_sequence_len: true
 
 gradient_accumulation_steps: 4
-micro_batch_size: 16
+micro_batch_size: 32
 
 optimizer: paged_adamw_8bit
 lr_scheduler: cosine

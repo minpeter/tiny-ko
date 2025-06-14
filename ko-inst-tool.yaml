@@ -1,7 +1,7 @@
 base_model: minpeter/tiny-ko-sft
 
-hub_model_id: minpeter/tiny-ko-tool
-output_dir: ./outputs/tiny-ko-tool
+hub_model_id: minpeter/tiny-ko-fc
+output_dir: ./outputs/tiny-ko-fc
 wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
 
@@ -9,20 +9,21 @@ chat_template: chatml
 datasets:
   - path: minpeter/ko-fc-1k
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: messages
 
 dataset_prepared_path: last_run_prepared
-val_set_size: 0.05
+val_set_size: 0.1
 
 save_steps: 200
 warmup_steps: 20
-eval_steps: 200
+evals_per_epoch: 1
 
 sequence_len: 2048
 
 # <<<< experimental settings <<<<
-sample_packing: false
+sample_packing: true
+eval_sample_packing: false
 train_on_inputs: true
 # >>>> experimental settings >>>
 
@@ -38,12 +39,6 @@ learning_rate: 1e-3
 bf16: auto
 tf32: false
 
-added_tokens_overrides:
-  128003: "<tool_call>"
-  128004: "</tool_call>"
-  128005: "<think>"
-  128006: "</think>"
-
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: false
@@ -51,5 +46,5 @@ resume_from_checkpoint:
 logging_steps: 1
 flash_attention: true
 
-num_epochs: 3
+num_epochs: 1
 weight_decay: 0.0
