@@ -3,6 +3,7 @@ from datasets import load_dataset
 from tokenizers import (
     Tokenizer,
     AddedToken,
+    Regex,
     models,
     normalizers,
     pre_tokenizers,
@@ -17,7 +18,7 @@ def train_and_save_huggingface_tokenizer():
     and saves it in a format compatible with the Hugging Face Transformers library.
     """
     # 1. Load Dataset
-    dataset = load_dataset("minpeter/tiny-ko-corpus", split="train[:5000]")
+    dataset = load_dataset("minpeter/tiny-ko-corpus", split="train[:1000]")
 
     print("✅ Dataset loaded successfully")
     print(dataset)
@@ -30,8 +31,19 @@ def train_and_save_huggingface_tokenizer():
 
     # 2. Initialize and configure the tokenizer
     tokenizer = Tokenizer(models.BPE())
-    tokenizer.normalizer = normalizers.Sequence([normalizers.NFKC()])
-    tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel()
+  # NFKC 유니코드 정규화를 적용합니다.
+    tokenizer.normalizer = normalizers.NFKC()
+
+    # tiktoken의 정규식 패턴을 정의합니다. 이 패턴은 단어, 구두점, 그리고
+    # 숫자를 1~3자리 단위로 효과적으로 분리합니다.
+    tiktoken_pattern = r"""(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"""
+
+    # 정규식 분할 후, 최종적으로 바이트 레벨로 처리합니다.
+    tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
+        pre_tokenizers.Split(Regex(tiktoken_pattern), behavior="isolated"),
+        pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=False)
+    ])
+
     tokenizer.decoder = decoders.ByteLevel()
 
     vocab_size = 32000
@@ -79,6 +91,9 @@ def train_and_save_huggingface_tokenizer():
     trainer = trainers.BpeTrainer(
         vocab_size=vocab_size,
         initial_alphabet=initial_alphabet,
+
+        min_frequency=2,
+        max_token_length=30,
     )
 
     print("⏳ Training started...")
