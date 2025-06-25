@@ -1,3 +1,5 @@
+# RUN COMMAND: time uv run accelerate launch train.py
+
 import os
 import evaluate
 import torch
@@ -5,6 +7,7 @@ from transformers import (
     AutoTokenizer,
     LlamaForCausalLM,
     AutoConfig,
+    LlamaConfig,
     DataCollatorForLanguageModeling,
     TrainingArguments,
     Trainer,
@@ -15,13 +18,17 @@ ds = load_dataset('minpeter/tiny-ko-corpus', split='train')
 ds = ds.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
 print(ds)
 
-context_length = 4096
+context_length = 8192
 max_cpu_count = int(os.cpu_count() / 3) or 1
 
 tokenizer = AutoTokenizer.from_pretrained("./tknz/tiny-ko-tokenizer")
 
-print(f"사용될 EOS 토큰: '{tokenizer.eos_token}', ID: {tokenizer.eos_token_id}")
-print(f"사용될 PAD 토큰: '{tokenizer.pad_token}', ID: {tokenizer.pad_token_id}")
+try:
+    print(f"사용될 EOS 토큰: '{tokenizer.eos_token}', ID: {tokenizer.eos_token_id}")
+    print(f"사용될 PAD 토큰: '{tokenizer.pad_token}', ID: {tokenizer.pad_token_id}")
+    print(f"사용될 BOS 토큰: '{tokenizer.bos_token}', ID: {tokenizer.bos_token_id}")
+except AttributeError as e:
+    print(e)
 
 def append_eos_to_text(examples):
     processed_texts = [text + tokenizer.eos_token for text in examples['text']]
@@ -67,21 +74,34 @@ for i in range(min(5, len(tokenized_dataset["train"]))):
 
 
 # 🚀 모델 초기화 (vocab_size는 토크나이저 길이에 맞춤)
-config = AutoConfig.from_pretrained(
-    "HuggingFaceTB/SmolLM2-135M",
-    vocab_size=len(tokenizer),    # EOS 또는 다른 토큰 추가로 인해 tokenizer 길이가 변경되었을 수 있음
+# config = AutoConfig.from_pretrained(
+#     "HuggingFaceTB/SmolLM2-135M",
+#     vocab_size=len(tokenizer),    # EOS 또는 다른 토큰 추가로 인해 tokenizer 길이가 변경되었을 수 있음
+#     max_position_embeddings=context_length,
+#     # bos_token_id=tokenizer.bos_token_id,
+#     eos_token_id=tokenizer.eos_token_id, # 위에서 설정된 tokenizer.eos_token_id 사용
+#     pad_token_id=tokenizer.pad_token_id, # 위에서 설정된 tokenizer.pad_token_id 사용 (eos_token_id와 같을 수 있음)
+# )
+config = LlamaConfig(
+    hidden_size=256,
+    num_hidden_layers=12,
+    intermediate_size=1024,
+    tie_word_embeddings=True,
+    num_attention_heads=4,
+    num_key_value_heads=2,
+    vocab_size=len(tokenizer),
     max_position_embeddings=context_length,
-    # bos_token_id=tokenizer.bos_token_id,
-    eos_token_id=tokenizer.eos_token_id, # 위에서 설정된 tokenizer.eos_token_id 사용
-    pad_token_id=tokenizer.pad_token_id, # 위에서 설정된 tokenizer.pad_token_id 사용 (eos_token_id와 같을 수 있음)
+    pad_token_id=tokenizer.pad_token_id,
+    eos_token_id=tokenizer.eos_token_id
 )
 
+
+config._attn_implementation = "flash_attention_2"
 model = LlamaForCausalLM(config)
-# 모델 config에도 pad_token_id를 명시적으로 다시 한번 설정 (config 객체와 model.config가 동일 참조가 아닐 수 있으므로)
-model.config.pad_token_id = tokenizer.pad_token_id
+model = model.to(torch.bfloat16)
 
 model_size = sum(t.numel() for t in model.parameters())
-print(f"\n모델 크기: {model_size/1000**3:.1f}B parameters")
+print(f"\n모델 크기: {model_size/1000**3:.2f}B parameters")
 
 def preprocess_logits_for_metrics(logits, labels):
     if isinstance(logits, tuple):
@@ -104,8 +124,8 @@ def compute_metrics(eval_preds):
 
 data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 
-hf_model_id = "minpeter/tiny-ko-base"
-local_model_path = "model/tiny-ko-base"
+hf_model_id = "minpeter/tiny-ko-20m-base"
+local_model_path = "model/tiny-ko-20m-base"
 
 tokenizer.save_pretrained(local_model_path)
 tokenizer.push_to_hub(hf_model_id)
@@ -122,8 +142,8 @@ args = TrainingArguments(
     save_steps=1_000,
 
     gradient_accumulation_steps=4,
-    per_device_train_batch_size=8,
-    per_device_eval_batch_size=8,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=16,
 
     logging_steps=5,
     num_train_epochs=1,
@@ -132,6 +152,8 @@ args = TrainingArguments(
     lr_scheduler_type="cosine",
     learning_rate=5e-4,
     bf16=True,
+    torch_compile=True,
+    dataloader_num_workers=max_cpu_count, 
     save_total_limit=5,
     load_best_model_at_end=True,
     metric_for_best_model="eval_accuracy",
