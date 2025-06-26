@@ -1,7 +1,7 @@
-base_model: minpeter/tiny-ko-base
+base_model: minpeter/tiny-ko-20m-base
 
-hub_model_id: minpeter/tiny-ko-sft
-output_dir: ./outputs/tiny-ko-sft
+hub_model_id: minpeter/tiny-ko-20m-sft
+output_dir: ./outputs/tiny-ko-20m-sft
 wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
 
@@ -9,7 +9,7 @@ chat_template: chatml
 datasets:
   - path: lemon-mint/Korean-FineTome-100k
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: messages
     message_property_mappings:
       role: role
@@ -17,7 +17,7 @@ datasets:
 
   - path: lemon-mint/smol-koreantalk
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: messages
     message_property_mappings:
       role: role
@@ -25,7 +25,7 @@ datasets:
 
   - path: heegyu/open-korean-instructions-v20231020
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -38,7 +38,7 @@ datasets:
   # NOTE: https://github.com/FreedomIntelligence/MultilingualSIFT
   - path: FreedomIntelligence/evol-instruct-korean
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -46,7 +46,7 @@ datasets:
 
   - path: FreedomIntelligence/alpaca-gpt4-korean
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -54,7 +54,7 @@ datasets:
 
   - path: FreedomIntelligence/sharegpt-korean
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -62,7 +62,7 @@ datasets:
 
   - path: coastral/korean-writing-style-instruct
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -70,7 +70,7 @@ datasets:
 
   - path: devngho/korean-instruction-mix
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: messages
     message_property_mappings:
       role: from
@@ -78,7 +78,7 @@ datasets:
 
   - path: youjunhyeok/Magpie-Pro-300K-Filtered-ko
     type: chat_template
-    split: train[:10%]
+    split: train
     field_messages: conversations
     message_property_mappings:
       role: from
@@ -86,6 +86,7 @@ datasets:
 
   - path: youjunhyeok/smoltalk-ko-translate
     type: chat_template
+    split: train
     name: merge_filtered
     field_messages: conversations
     message_property_mappings:
@@ -99,7 +100,7 @@ save_steps: 200
 warmup_steps: 20
 eval_steps: 200
 
-sequence_len: 4096
+sequence_len: 8192
 
 # <<<< experimental settings <<<<
 sample_packing: true

@@ -1,31 +1,30 @@
 # RUN COMMAND: time uv run accelerate launch train.py
 
 import os
-import evaluate
 import torch
 from transformers import (
     AutoTokenizer,
     LlamaForCausalLM,
-    AutoConfig,
     LlamaConfig,
     DataCollatorForLanguageModeling,
     TrainingArguments,
     Trainer,
 )
-from datasets import load_dataset, concatenate_datasets
+from datasets import load_dataset, concatenate_datasets, Dataset
+from tqdm import tqdm
 
-ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train")
+ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:50_000]")
 
 # >>> en dataset >>>
 cosmopedia = load_dataset(
     "HuggingFaceTB/smollm-corpus",
     data_files=[f"cosmopedia-v2/train-{i:05d}-of-00104.parquet" for i in range(21)],
-    split="train",
+    split="train[:50_000]",
 )
 fineweb = load_dataset(
     "HuggingFaceTB/smollm-corpus",
     data_files=[f"fineweb-edu-dedup/train-{i:05d}-of-00234.parquet" for i in range(21)],
-    split="train",
+    split="train[:50_000]",
 )
 cosmopedia_text = cosmopedia.remove_columns(
     [col for col in cosmopedia.column_names if col != "text"]
@@ -37,14 +36,14 @@ ds_en = concatenate_datasets([cosmopedia_text, fineweb_text])
 # <<< en dataset <<<
 
 ds = concatenate_datasets([ds_kr, ds_en])
-
 ds = ds.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
 print(ds)
 
-context_length = 8192
+context_length = 2048
 max_cpu_count = int(os.cpu_count() / 3) or 1
 
 tokenizer = AutoTokenizer.from_pretrained("./tknz/tiny-ko-tokenizer")
+tokenizer.model_max_length = context_length
 
 try:
     print(f"사용될 EOS 토큰: '{tokenizer.eos_token}', ID: {tokenizer.eos_token_id}")
@@ -54,73 +53,71 @@ except AttributeError as e:
     print(e)
 
 
-def append_eos_to_text(examples):
-    processed_texts = [text + tokenizer.eos_token for text in examples["text"]]
-    examples["text"] = processed_texts
-    return examples
+def tokenize_with_eos(examples):
+    # 각 텍스트의 끝에 EOS 토큰 추가
+    texts_with_eos = [text + tokenizer.eos_token for text in examples["text"]]
+    # truncation=False, padding=False로 설정하여 원본 길이 그대로 토큰화
+    return tokenizer(texts_with_eos, truncation=False, padding=False)
 
 
-print("\n각 문서에 EOS 토큰 추가 중...")
-ds_with_eos = ds.map(
-    append_eos_to_text, batched=True, batch_size=5_000, num_proc=max_cpu_count
-)
-print("EOS 추가 후 데이터셋 샘플 (text 필드만):")
-print(ds_with_eos["train"][0]["text"][-100:])
-
-
-def tokenize(element):
-    outputs = tokenizer(
-        element["text"],
-        truncation=True,
-        max_length=context_length,
-        return_overflowing_tokens=True,
-        return_length=True,
-    )
-    return outputs
-
-
-print("\n토큰화 진행 중...")
-tokenized_dataset = ds_with_eos.map(
-    tokenize,
-    remove_columns=ds_with_eos["train"].column_names,
+print("\nEOS 토큰 추가와 토큰화를 동시에 진행 중...")
+tokenized_ds = ds.map(
+    tokenize_with_eos,
     batched=True,
-    batch_size=5_000,
     num_proc=max_cpu_count,
+    remove_columns=ds["train"].column_names,
 )
-print("토큰화된 데이터셋 구조:")
-print(tokenized_dataset)
-print("토큰화된 데이터셋 샘플 (input_ids):")
-for i in range(min(5, len(tokenized_dataset["train"]))):
-    last_tokens = tokenized_dataset["train"][i]["input_ids"][-5:]
+
+
+def pack_dataset(dataset, context_length):
+    # 모든 'input_ids' 리스트를 하나의 거대한 리스트로 결합
+    all_tokens = []
+    for example in tqdm(dataset["input_ids"], desc="Flattening input_ids"):
+        all_tokens.extend(example)  # 각 문서(EOS 포함)를 순서대로 추가
+
     print(
-        f"샘플 {i}의 마지막 5개 토큰 ID: {last_tokens}, EOS ID와 비교: {tokenizer.eos_token_id}"
+        f"데이터셋의 총 토큰 수: {len(all_tokens):,} "
+        f"({len(all_tokens)/1_000_000_000:.4f}B, {len(all_tokens)/1_000_000_000_000:.4f}T)"
     )
-    if tokenizer.eos_token_id in last_tokens:
-        print(
-            f"  샘플 {i}의 마지막에 EOS 토큰 ID({tokenizer.eos_token_id})가 포함되어 있습니다."
-        )
+
+    packed_examples = {"input_ids": []}
+    for i in tqdm(
+        range(0, len(all_tokens) // context_length * context_length, context_length),
+        desc="Packing dataset",
+        unit="chunk",
+    ):
+        chunk = all_tokens[i : i + context_length]
+        packed_examples["input_ids"].append(chunk)
+
+    return Dataset.from_dict(packed_examples)
 
 
-# 🚀 모델 초기화 (vocab_size는 토크나이저 길이에 맞춤)
-# config = AutoConfig.from_pretrained(
-#     "HuggingFaceTB/SmolLM2-135M",
-#     vocab_size=len(tokenizer),    # EOS 또는 다른 토큰 추가로 인해 tokenizer 길이가 변경되었을 수 있음
-#     max_position_embeddings=context_length,
-#     # bos_token_id=tokenizer.bos_token_id,
-#     eos_token_id=tokenizer.eos_token_id, # 위에서 설정된 tokenizer.eos_token_id 사용
-#     pad_token_id=tokenizer.pad_token_id, # 위에서 설정된 tokenizer.pad_token_id 사용 (eos_token_id와 같을 수 있음)
-# )
+print("\n데이터셋을 패킹 중...")
+train_packed = pack_dataset(tokenized_ds["train"], context_length)
+test_packed = pack_dataset(tokenized_ds["test"], context_length)
+
+tokenized_dataset = {"train": train_packed, "test": test_packed}
+
+print("\n패킹 완료된 데이터셋 구조:")
+print(tokenized_dataset)
+print(f"훈련 샘플 수: {len(tokenized_dataset['train'])}")
+print(f"테스트 샘플 수: {len(tokenized_dataset['test'])}")
+print(f"샘플 0의 토큰 수: {len(tokenized_dataset['train'][0]['input_ids'])}")
+print(f"샘플 0의 마지막 5개 토큰: {tokenized_dataset['train'][0]['input_ids'][-5:]}")
+
 config = LlamaConfig(
-    hidden_size=256,
-    num_hidden_layers=12,
-    intermediate_size=1024,
+    hidden_size=480,
+    num_hidden_layers=32,
+    intermediate_size=1920,
     tie_word_embeddings=True,
-    num_attention_heads=4,
+    num_attention_heads=6,
     num_key_value_heads=2,
     vocab_size=len(tokenizer),
     max_position_embeddings=context_length,
     pad_token_id=tokenizer.pad_token_id,
     eos_token_id=tokenizer.eos_token_id,
+    rope_theta=10000.0,
+    use_cache=False,
 )
 
 
@@ -132,31 +129,10 @@ model_size = sum(t.numel() for t in model.parameters())
 print(f"\n모델 크기: {model_size/1000**3:.2f}B parameters")
 
 
-def preprocess_logits_for_metrics(logits, labels):
-    if isinstance(logits, tuple):
-        logits = logits[0]
-    return torch.argmax(logits, axis=-1)
-
-
-metric = evaluate.load("accuracy")
-
-
-def compute_metrics(eval_preds):
-    preds, labels = eval_preds
-    # preds have the same shape as the labels, after the argmax(-1) has been calculated
-    # by preprocess_logits_for_metrics but we need to shift the labels
-    labels = labels[:, 1:].reshape(-1)
-    preds = preds[:, :-1].reshape(-1)
-    mask = labels != -100
-    labels = labels[mask]
-    preds = preds[mask]
-    return metric.compute(predictions=preds, references=labels)
-
-
 data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 
-hf_model_id = "minpeter/tiny-ko-20m-base-en"
-local_model_path = "model/tiny-ko-20m-base-en"
+hf_model_id = "minpeter/tiny-ko-124m-base"
+local_model_path = "model/tiny-ko-124m-base"
 
 tokenizer.save_pretrained(local_model_path)
 tokenizer.push_to_hub(hf_model_id)
@@ -170,22 +146,24 @@ args = TrainingArguments(
     save_strategy="steps",
     eval_steps=1_000,
     save_steps=1_000,
-    gradient_accumulation_steps=4,
-    per_device_train_batch_size=16,
-    per_device_eval_batch_size=16,
-    logging_steps=5,
+    gradient_accumulation_steps=2,
+    per_device_train_batch_size=36,
+    per_device_eval_batch_size=36,
+    logging_steps=25,
     num_train_epochs=1,
     weight_decay=0.1,
-    warmup_steps=1_000,
+    warmup_ratio=0.05,
     lr_scheduler_type="cosine",
-    learning_rate=5e-4,
+    learning_rate=2e-3,
+    optim="adamw_torch_fused",
+    dataloader_pin_memory=True,
     bf16=True,
     torch_compile=True,
     dataloader_num_workers=max_cpu_count,
     save_total_limit=5,
     load_best_model_at_end=True,
-    metric_for_best_model="eval_accuracy",
-    greater_is_better=True,
+    metric_for_best_model="eval_loss",
+    greater_is_better=False,
 )
 
 trainer = Trainer(
@@ -194,8 +172,6 @@ trainer = Trainer(
     data_collator=data_collator,
     train_dataset=tokenized_dataset["train"],
     eval_dataset=tokenized_dataset["test"],
-    compute_metrics=compute_metrics,
-    preprocess_logits_for_metrics=preprocess_logits_for_metrics,
 )
 
 trainer.train()
