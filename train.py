@@ -13,18 +13,18 @@ from transformers import (
 from datasets import load_dataset, concatenate_datasets, Dataset
 from tqdm import tqdm
 
-ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:50_000]")
+ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:800_000]")
 
 # >>> en dataset >>>
 cosmopedia = load_dataset(
     "HuggingFaceTB/smollm-corpus",
     data_files=[f"cosmopedia-v2/train-{i:05d}-of-00104.parquet" for i in range(21)],
-    split="train[:50_000]",
+    split="train[:800_000]",
 )
 fineweb = load_dataset(
     "HuggingFaceTB/smollm-corpus",
     data_files=[f"fineweb-edu-dedup/train-{i:05d}-of-00234.parquet" for i in range(21)],
-    split="train[:50_000]",
+    split="train[:800_000]",
 )
 cosmopedia_text = cosmopedia.remove_columns(
     [col for col in cosmopedia.column_names if col != "text"]
@@ -69,26 +69,40 @@ tokenized_ds = ds.map(
 )
 
 
-def pack_dataset(dataset, context_length):
-    # 모든 'input_ids' 리스트를 하나의 거대한 리스트로 결합
-    all_tokens = []
-    for example in tqdm(dataset["input_ids"], desc="Flattening input_ids"):
-        all_tokens.extend(example)  # 각 문서(EOS 포함)를 순서대로 추가
+def pack_dataset(dataset, context_length=2048):
+    """
+    메모리 효율적으로 데이터셋을 패킹하고, 총 토큰 수를 계산하는 함수.
+    """
+    total_tokens_processed = 0
+    packed_examples = {"input_ids": []}
+    buffer = []
 
+    # tqdm의 total을 문서의 수로 설정하여 정확한 진행률 표시
+    for example in tqdm(
+        dataset, total=len(dataset), desc="Efficiently packing dataset"
+    ):
+        input_ids = example["input_ids"]
+
+        # 처리된 토큰 수 집계
+        total_tokens_processed += len(input_ids)
+
+        # 현재 문서의 토큰들을 버퍼에 추가
+        buffer.extend(input_ids)
+
+        # 버퍼에 context_length 만큼의 토큰이 쌓이면 패킹 진행
+        while len(buffer) >= context_length:
+            # context_length 만큼 잘라내어 packed_examples에 추가
+            packed_examples["input_ids"].append(buffer[:context_length])
+            # 버퍼에서 사용된 부분 제거
+            buffer = buffer[context_length:]
+
+    # 모든 루프가 끝난 후, 최종 토큰 수 출력
     print(
-        f"데이터셋의 총 토큰 수: {len(all_tokens):,} "
-        f"({len(all_tokens)/1_000_000_000:.4f}B, {len(all_tokens)/1_000_000_000_000:.4f}T)"
+        f"데이터셋의 총 토큰 수: {total_tokens_processed:,} "
+        f"({total_tokens_processed/1_000_000_000:.4f}B, {total_tokens_processed/1_000_000_000_000:.4f}T)"
     )
 
-    packed_examples = {"input_ids": []}
-    for i in tqdm(
-        range(0, len(all_tokens) // context_length * context_length, context_length),
-        desc="Packing dataset",
-        unit="chunk",
-    ):
-        chunk = all_tokens[i : i + context_length]
-        packed_examples["input_ids"].append(chunk)
-
+    # 남은 토큰들은 버려짐 (기존 로직과 동일)
     return Dataset.from_dict(packed_examples)
 
 
@@ -154,7 +168,7 @@ args = TrainingArguments(
     weight_decay=0.1,
     warmup_ratio=0.05,
     lr_scheduler_type="cosine",
-    learning_rate=2e-3,
+    learning_rate=6e-4,
     optim="adamw_torch_fused",
     dataloader_pin_memory=True,
     bf16=True,
