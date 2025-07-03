@@ -10,115 +10,39 @@ from transformers import (
     TrainingArguments,
     Trainer,
 )
-from datasets import load_dataset, concatenate_datasets, Dataset
-from tqdm import tqdm
+from datasets import load_from_disk
 
-ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:800_000]")
+# --- 설정 ---
+# preprocess.py에서 저장한 데이터셋 경로
+PROCESSED_DATA_PATH = "./processed_data"
+TOKENIZER_PATH = "./tknz/tiny-ko-tokenizer"
+CONTEXT_LENGTH = 2048
+HF_MODEL_ID = "minpeter/tiny-ko-124m-base"
+LOCAL_MODEL_PATH = "model/tiny-ko-124m-base"
+# ----------------
 
-# >>> en dataset >>>
-cosmopedia = load_dataset(
-    "HuggingFaceTB/smollm-corpus",
-    data_files=[f"cosmopedia-v2/train-{i:05d}-of-00104.parquet" for i in range(21)],
-    split="train[:800_000]",
-)
-fineweb = load_dataset(
-    "HuggingFaceTB/smollm-corpus",
-    data_files=[f"fineweb-edu-dedup/train-{i:05d}-of-00234.parquet" for i in range(21)],
-    split="train[:800_000]",
-)
-cosmopedia_text = cosmopedia.remove_columns(
-    [col for col in cosmopedia.column_names if col != "text"]
-)
-fineweb_text = fineweb.remove_columns(
-    [col for col in fineweb.column_names if col != "text"]
-)
-ds_en = concatenate_datasets([cosmopedia_text, fineweb_text])
-# <<< en dataset <<<
+# 1. 전처리 완료된 데이터셋을 디스크에서 바로 로드
+print(f"사전 처리된 데이터셋을 '{PROCESSED_DATA_PATH}'에서 로드합니다.")
+tokenized_dataset = load_from_disk(PROCESSED_DATA_PATH)
 
-ds = concatenate_datasets([ds_kr, ds_en])
-ds = ds.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
-print(ds)
+print("\n로딩 완료된 데이터셋 구조:")
+print(tokenized_dataset)
+print(f"훈련 샘플 수: {len(tokenized_dataset['train'])}")
+print(f"테스트 샘플 수: {len(tokenized_dataset['test'])}")
+print(f"샘플 0의 토큰 수: {len(tokenized_dataset['train'][0]['input_ids'])}")
 
-context_length = 2048
-max_cpu_count = int(os.cpu_count() / 3) or 1
-
-tokenizer = AutoTokenizer.from_pretrained("./tknz/tiny-ko-tokenizer")
-tokenizer.model_max_length = context_length
+# 2. 토크나이저 로드
+tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
+# tokenizer.model_max_length = CONTEXT_LENGTH
 
 try:
-    print(f"사용될 EOS 토큰: '{tokenizer.eos_token}', ID: {tokenizer.eos_token_id}")
+    print(f"\n사용될 EOS 토큰: '{tokenizer.eos_token}', ID: {tokenizer.eos_token_id}")
     print(f"사용될 PAD 토큰: '{tokenizer.pad_token}', ID: {tokenizer.pad_token_id}")
     print(f"사용될 BOS 토큰: '{tokenizer.bos_token}', ID: {tokenizer.bos_token_id}")
 except AttributeError as e:
     print(e)
 
-
-def tokenize_with_eos(examples):
-    # 각 텍스트의 끝에 EOS 토큰 추가
-    texts_with_eos = [text + tokenizer.eos_token for text in examples["text"]]
-    # truncation=False, padding=False로 설정하여 원본 길이 그대로 토큰화
-    return tokenizer(texts_with_eos, truncation=False, padding=False)
-
-
-print("\nEOS 토큰 추가와 토큰화를 동시에 진행 중...")
-tokenized_ds = ds.map(
-    tokenize_with_eos,
-    batched=True,
-    num_proc=max_cpu_count,
-    remove_columns=ds["train"].column_names,
-)
-
-
-def pack_dataset(dataset, context_length=2048):
-    """
-    메모리 효율적으로 데이터셋을 패킹하고, 총 토큰 수를 계산하는 함수.
-    """
-    total_tokens_processed = 0
-    packed_examples = {"input_ids": []}
-    buffer = []
-
-    # tqdm의 total을 문서의 수로 설정하여 정확한 진행률 표시
-    for example in tqdm(
-        dataset, total=len(dataset), desc="Efficiently packing dataset"
-    ):
-        input_ids = example["input_ids"]
-
-        # 처리된 토큰 수 집계
-        total_tokens_processed += len(input_ids)
-
-        # 현재 문서의 토큰들을 버퍼에 추가
-        buffer.extend(input_ids)
-
-        # 버퍼에 context_length 만큼의 토큰이 쌓이면 패킹 진행
-        while len(buffer) >= context_length:
-            # context_length 만큼 잘라내어 packed_examples에 추가
-            packed_examples["input_ids"].append(buffer[:context_length])
-            # 버퍼에서 사용된 부분 제거
-            buffer = buffer[context_length:]
-
-    # 모든 루프가 끝난 후, 최종 토큰 수 출력
-    print(
-        f"데이터셋의 총 토큰 수: {total_tokens_processed:,} "
-        f"({total_tokens_processed/1_000_000_000:.4f}B, {total_tokens_processed/1_000_000_000_000:.4f}T)"
-    )
-
-    # 남은 토큰들은 버려짐 (기존 로직과 동일)
-    return Dataset.from_dict(packed_examples)
-
-
-print("\n데이터셋을 패킹 중...")
-train_packed = pack_dataset(tokenized_ds["train"], context_length)
-test_packed = pack_dataset(tokenized_ds["test"], context_length)
-
-tokenized_dataset = {"train": train_packed, "test": test_packed}
-
-print("\n패킹 완료된 데이터셋 구조:")
-print(tokenized_dataset)
-print(f"훈련 샘플 수: {len(tokenized_dataset['train'])}")
-print(f"테스트 샘플 수: {len(tokenized_dataset['test'])}")
-print(f"샘플 0의 토큰 수: {len(tokenized_dataset['train'][0]['input_ids'])}")
-print(f"샘플 0의 마지막 5개 토큰: {tokenized_dataset['train'][0]['input_ids'][-5:]}")
-
+# 3. 모델 구성 (Config)
 config = LlamaConfig(
     hidden_size=480,
     num_hidden_layers=32,
@@ -127,14 +51,15 @@ config = LlamaConfig(
     num_attention_heads=6,
     num_key_value_heads=2,
     vocab_size=len(tokenizer),
-    max_position_embeddings=context_length,
+    max_position_embeddings=CONTEXT_LENGTH,
     pad_token_id=tokenizer.pad_token_id,
     eos_token_id=tokenizer.eos_token_id,
     rope_theta=10000.0,
     use_cache=False,
+    attn_implementation="flash_attention_2",
 )
 
-
+# 4. 모델 초기화
 config._attn_implementation = "flash_attention_2"
 model = LlamaForCausalLM(config)
 model = model.to(torch.bfloat16)
@@ -142,27 +67,26 @@ model = model.to(torch.bfloat16)
 model_size = sum(t.numel() for t in model.parameters())
 print(f"\n모델 크기: {model_size/1000**3:.2f}B parameters")
 
-
+# 5. 데이터 콜레이터, 토크나이저 저장 및 푸시
 data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+os.makedirs(LOCAL_MODEL_PATH, exist_ok=True)
+tokenizer.save_pretrained(LOCAL_MODEL_PATH)
+tokenizer.push_to_hub(HF_MODEL_ID)
 
-hf_model_id = "minpeter/tiny-ko-124m-base"
-local_model_path = "model/tiny-ko-124m-base"
-
-tokenizer.save_pretrained(local_model_path)
-tokenizer.push_to_hub(hf_model_id)
-
+# 6. 학습 인자 (TrainingArguments) 설정
+max_cpu_count = int(os.cpu_count() / 3) or 1
 args = TrainingArguments(
-    output_dir=local_model_path,
-    push_to_hub=True,
-    hub_model_id=hf_model_id,
+    output_dir=LOCAL_MODEL_PATH,
+    push_to_hub=True, # 필요시 주석 해제
+    hub_model_id=HF_MODEL_ID,
     hub_strategy="every_save",
     eval_strategy="steps",
     save_strategy="steps",
     eval_steps=1_000,
     save_steps=1_000,
     gradient_accumulation_steps=2,
-    per_device_train_batch_size=36,
-    per_device_eval_batch_size=36,
+    per_device_train_batch_size=39,
+    per_device_eval_batch_size=39,
     logging_steps=25,
     num_train_epochs=1,
     weight_decay=0.1,
@@ -180,6 +104,7 @@ args = TrainingArguments(
     greater_is_better=False,
 )
 
+# 7. 트레이너(Trainer) 초기화 및 학습 시작
 trainer = Trainer(
     model=model,
     args=args,

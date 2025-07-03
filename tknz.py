@@ -19,20 +19,20 @@ def train_and_save_huggingface_tokenizer():
     and saves it in a format compatible with the Hugging Face Transformers library.
     """
     # 1. Load Dataset
-    ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train")
+    ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:1000]")
 
     # >>> en dataset >>>
     cosmopedia = load_dataset(
         "HuggingFaceTB/smollm-corpus",
         data_files=[f"cosmopedia-v2/train-{i:05d}-of-00104.parquet" for i in range(21)],
-        split="train",
+        split="train[:1000]",
     )
     fineweb = load_dataset(
         "HuggingFaceTB/smollm-corpus",
         data_files=[
             f"fineweb-edu-dedup/train-{i:05d}-of-00234.parquet" for i in range(21)
         ],
-        split="train",
+        split="train[:1000]",
     )
     cosmopedia_text = cosmopedia.remove_columns(
         [col for col in cosmopedia.column_names if col != "text"]
@@ -148,7 +148,7 @@ def train_and_save_huggingface_tokenizer():
         # model_max_length=8192,
     )
 
-    output_dir = "./tknz/tiny-ko-tokenizer"
+    output_dir = "./tknz/tiny-ko-tokenizer-test"
     os.makedirs(output_dir, exist_ok=True)
     fast_tokenizer.save_pretrained(output_dir)
 
