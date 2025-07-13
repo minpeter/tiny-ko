@@ -1,7 +1,7 @@
-base_model: minpeter/tiny-ko-124m-base
+base_model: minpeter/tiny-ko-124m-base-muon
 
-hub_model_id: minpeter/tiny-ko-124m-sft
-output_dir: ./outputs/tiny-ko-124m-sft
+hub_model_id: minpeter/tiny-ko-124m-sft-muon
+output_dir: ./outputs/tiny-ko-124m-sft-muon
 wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
 
@@ -39,6 +39,7 @@ datasets:
       user: ["human", "user"]
       assistant: ["gpt", "assistant", "bot"]
       system: ["system", "input"]
+
   - path: trillionlabs/multisystem-curated
     type: chat_template
     split: train
@@ -46,6 +47,7 @@ datasets:
     message_property_mappings:
       role: role
       content: content
+
   - path: allenai/tulu-3-sft-personas-instruction-following
     type: chat_template
     split: train
@@ -53,6 +55,7 @@ datasets:
     message_property_mappings:
       role: role
       content: content
+
   - path: coastral/korean-writing-style-instruct
     type: chat_template
     split: train
@@ -102,7 +105,7 @@ overrides_of_model_config:
 gradient_accumulation_steps: 8
 micro_batch_size: 32
 num_epochs: 1
-optimizer: adamw_bnb_8bit
+optimizer: muon
 lr_scheduler: cosine
 learning_rate: 3e-4
 
