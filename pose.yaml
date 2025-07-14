@@ -12,7 +12,23 @@ strict: false
 
 chat_template: chatml
 datasets:
-  - path: lemon-mint/Korean-FineTome-100k
+  - path: HuggingFaceTB/smol-smoltalk
+    type: chat_template
+    split: train
+    field_messages: messages
+    message_property_mappings:
+      role: role
+      content: content
+
+  - path: trillionlabs/multisystem-curated
+    type: chat_template
+    split: train
+    field_messages: messages
+    message_property_mappings:
+      role: role
+      content: content
+
+  - path: allenai/tulu-3-sft-personas-instruction-following
     type: chat_template
     split: train
     field_messages: messages
@@ -21,6 +37,14 @@ datasets:
       content: content
 
   - path: lemon-mint/smol-koreantalk
+    type: chat_template
+    split: train
+    field_messages: messages
+    message_property_mappings:
+      role: role
+      content: content
+
+  - path: lemon-mint/Korean-FineTome-100k
     type: chat_template
     split: train
     field_messages: messages
@@ -40,22 +64,6 @@ datasets:
       assistant: ["gpt", "assistant", "bot"]
       system: ["system", "input"]
 
-  - path: trillionlabs/multisystem-curated
-    type: chat_template
-    split: train
-    field_messages: messages
-    message_property_mappings:
-      role: role
-      content: content
-
-  - path: allenai/tulu-3-sft-personas-instruction-following
-    type: chat_template
-    split: train
-    field_messages: messages
-    message_property_mappings:
-      role: role
-      content: content
-
   - path: coastral/korean-writing-style-instruct
     type: chat_template
     split: train
@@ -71,23 +79,6 @@ datasets:
     message_property_mappings:
       role: from
       content: value
-
-  - path: youjunhyeok/Magpie-Pro-300K-Filtered-ko
-    type: chat_template
-    split: train
-    field_messages: conversations
-    message_property_mappings:
-      role: from
-      content: value
-
-  - path: youjunhyeok/smoltalk-ko-translate
-    type: chat_template
-    split: train
-    name: merge_filtered
-    field_messages: conversations
-    message_property_mappings:
-      role: role
-      content: content
 
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.001
