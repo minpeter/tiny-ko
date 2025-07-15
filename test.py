@@ -1,3 +1,4 @@
+import os
 import torch
 from transformers import LlamaConfig, LlamaForCausalLM, AutoTokenizer
 from transformers import DataCollatorWithFlattening
@@ -46,17 +47,28 @@ def preprocess_function(examples):
 
     return tokenized_inputs
 
+# 데이터셋 로드 및 매핑
+train_dataset = load_dataset("Elriggs/openwebtext-100k", split="train")
 tokenized_dataset = train_dataset.map(
     preprocess_function,
-    batched=True
+    batched=True,
+    num_proc=os.cpu_count(),
+    remove_columns=train_dataset.column_names
 )
 
 data_collator = DataCollatorWithFlattening()
 
 train_args = TrainingArguments(
     output_dir="./outputs/test",
-    remove_unused_columns=False,
+    bf16=True,
+    per_device_train_batch_size=8,
     torch_compile=True,
+    logging_steps=50,
+    learning_rate=1e-3,
+    warmup_steps=100,
+    lr_scheduler_type="cosine",
+    dataloader_num_workers=os.cpu_count(),
+    dataloader_pin_memory=True
 )
 trainer = Trainer(
     args=train_args,
