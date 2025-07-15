@@ -1,5 +1,5 @@
 # # train qwen-like dense model with muon
-# uv run moonlight-muon-train.py --model qwen --optimizer muon --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
+# uv run moonlight-muon-train.py --model llama --optimizer muon --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
 
 # # train qwen-like dense model with adamw
 # uv run moonlight-muon-train.py --model qwen --optimizer adamw --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
@@ -12,7 +12,9 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import (
     Qwen2Config,
     Qwen2ForCausalLM,
-    Qwen2Tokenizer,
+    LlamaConfig,
+    LlamaForCausalLM,
+    AutoTokenizer,
     get_cosine_schedule_with_warmup,
 )
 from tqdm import tqdm
@@ -54,12 +56,9 @@ def get_model_and_dataloader(model_name, dataset_name, hidden_size):
         "openwebtext-100k": "Elriggs/openwebtext-100k",
     }
     train_dataset = load_dataset(name2path[dataset_name], trust_remote_code=True)
-    if model_name == "qwen":
-        tokenizer = Qwen2Tokenizer.from_pretrained(
-            "Qwen/Qwen2.5-0.5B", trust_remote_code=True
-        )
-    else:
-        assert 0, f"model {model_name} not supported"
+    tokenizer = AutoTokenizer.from_pretrained(
+        "./tknz/tiny-ko-tokenizer", trust_remote_code=True
+    )
     train_dataset = MoonDataset(dataset_name, train_dataset, tokenizer)
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 
@@ -90,6 +89,25 @@ def get_model_and_dataloader(model_name, dataset_name, hidden_size):
             vocab_size=len(tokenizer),
         )
         model = Qwen2ForCausalLM(config)
+    elif model_name == "llama":
+        config = LlamaConfig(
+            hidden_size=480,
+            num_hidden_layers=32,
+            intermediate_size=1920,
+            tie_word_embeddings=True,
+            num_attention_heads=6,
+            num_key_value_heads=2,
+            vocab_size=len(tokenizer),
+            max_position_embeddings=513,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            rope_theta=10000.0,
+            use_cache=False,
+            attn_implementation="flash_attention_2",
+        )
+
+        # config._attn_implementation = "flash_attention_2"
+        model = LlamaForCausalLM(config)
     else:
         assert 0, f"model {model_name} not supported"
     return model, train_loader
