@@ -19,7 +19,7 @@ def train_and_save_huggingface_tokenizer():
     and saves it in a format compatible with the Hugging Face Transformers library.
     """
     # 1. Load Dataset
-    ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:1000]")
+    ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:500]")
 
     # >>> en dataset >>>
     cosmopedia = load_dataset(
