@@ -1,3 +1,9 @@
+# # train qwen-like dense model with muon
+# python3 examples/toy_train.py --model qwen --optimizer muon --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
+
+# # train qwen-like dense model with adamw
+# python3 examples/toy_train.py --model qwen --optimizer adamw --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
+
 import os
 import math
 import torch
