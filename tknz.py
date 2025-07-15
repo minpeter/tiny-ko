@@ -124,7 +124,13 @@ def train_and_save_huggingface_tokenizer(
     except Exception as e:
         print(f"❌ Failed to load AutoTokenizer: {e}")
 
-    print("Tokenizer total vocab size:", len(loaded_tokenizer))
+    vocab_size = len(loaded_tokenizer)
+    print("Tokenizer total vocab size:", vocab_size)
+    if vocab_size % 64 != 0:
+        print(
+            f"\n⚠️ Warning: Tokenizer vocab size ({vocab_size}) is not divisible by 64.\n"
+            "This may lead to slight performance degradation during model quantization or training."
+        )
 
 if __name__ == "__main__":
     ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:500]")
