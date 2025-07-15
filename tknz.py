@@ -96,18 +96,12 @@ def train_and_save_huggingface_tokenizer(target_vocab_size: int = 32000):
     # 3. Set up the Initial Alphabet
     byte_level_alphabet = pre_tokenizers.ByteLevel.alphabet()
 
-    # Korean Jamo characters
-    chosung = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
-    jungsung = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
-    jongsung = "ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ"
-    hangul_jamo = list(set(chosung + jungsung + jongsung))
-
     # Reserved words for ChatML format
     chatml_reserved_words = ["system", "user", "assistant", "tool"]
 
     # Create the initial alphabet including byte-level, Hangul Jamo, and reserved words
     initial_alphabet = sorted(
-        list(set(byte_level_alphabet + hangul_jamo + chatml_reserved_words))
+        list(set(byte_level_alphabet + chatml_reserved_words))
     )
 
     # 4. Train the Tokenizer
