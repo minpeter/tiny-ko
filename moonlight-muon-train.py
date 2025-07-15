@@ -65,6 +65,7 @@ def get_model_and_dataloader(model_name, dataset_name, hidden_size):
 
     if model_name == "qwen":
         config = Qwen2Config(
+            attn_implementation="flash_attention_2",
             attention_dropout=0.0,
             bos_token_id=151643,
             eos_token_id=151643,
@@ -86,7 +87,7 @@ def get_model_and_dataloader(model_name, dataset_name, hidden_size):
             use_cache=True,
             use_mrope=False,
             use_sliding_window=False,
-            vocab_size=151936,
+            vocab_size=len(tokenizer),
         )
         model = Qwen2ForCausalLM(config)
     else:
@@ -144,6 +145,7 @@ if __name__ == "__main__":
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(torch.bfloat16)
     model.to(device)
 
     model.train()
