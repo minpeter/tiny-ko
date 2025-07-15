@@ -1,4 +1,6 @@
-# RUN COMMAND: time uv run accelerate launch train.py
+# RUN COMMAND:
+# export CUDA_VISIBLE_DEVICES=0,1,2,3
+# time uv run accelerate launch 02-train.py
 
 import os
 import torch

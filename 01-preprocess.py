@@ -1,5 +1,3 @@
-# 파일명: preprocess.py (최종 최적화 버전)
-
 import os
 import time
 import itertools
@@ -91,11 +89,10 @@ def setup_directories():
     os.makedirs(SAVE_PATH, exist_ok=True)
 
 def load_raw_datasets():
-    # ... (이전과 동일)
     print("원본 데이터셋 로딩 중...")
-    ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train")
-    cosmopedia = load_dataset("HuggingFaceTB/smollm-corpus", data_files=[f"cosmopedia-v2/train-{i:05d}-of-00104.parquet" for i in range(21)], split="train")
-    fineweb = load_dataset("HuggingFaceTB/smollm-corpus", data_files=[f"fineweb-edu-dedup/train-{i:05d}-of-00234.parquet" for i in range(21)], split="train")
+    ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:2000]")
+    cosmopedia = load_dataset("HuggingFaceTB/smollm-corpus", data_files=[f"cosmopedia-v2/train-{i:05d}-of-00104.parquet" for i in range(21)], split="train[:2000]")
+    fineweb = load_dataset("HuggingFaceTB/smollm-corpus", data_files=[f"fineweb-edu-dedup/train-{i:05d}-of-00234.parquet" for i in range(21)], split="train[:2000]")
     cosmopedia_text = cosmopedia.remove_columns([col for col in cosmopedia.column_names if col != "text"])
     fineweb_text = fineweb.remove_columns([col for col in fineweb.column_names if col != "text"])
     ds_en = concatenate_datasets([cosmopedia_text, fineweb_text])
@@ -103,7 +100,6 @@ def load_raw_datasets():
     return ds.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
 
 def tokenize_dataset(ds, tokenizer):
-    # ... (이전과 동일)
     print("\n토큰화 진행 중...")
     num_proc = max(1, os.cpu_count() - 2)
     def tokenize_with_eos(examples):
