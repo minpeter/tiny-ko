@@ -15,6 +15,7 @@ from transformers import PreTrainedTokenizerFast, AutoTokenizer
 
 def train_and_save_huggingface_tokenizer(
     dataset: Dataset,
+    output_dir: str = "./tknz/tiny-ko-tokenizer",
     target_vocab_size: int = 32000
 ):
     # Define additional tokens needed, excluding EOS, BOS, PAD, UNK, and instruct tokens
@@ -96,7 +97,6 @@ def train_and_save_huggingface_tokenizer(
         # model_max_length=8192,
     )
 
-    output_dir = "./tknz/tiny-ko-tokenizer-test"
     os.makedirs(output_dir, exist_ok=True)
     fast_tokenizer.save_pretrained(output_dir)
 
@@ -154,5 +154,6 @@ if __name__ == "__main__":
 
     train_and_save_huggingface_tokenizer(
         dataset=dataset,
+        output_dir="./tknz/tiny-ko-tokenizer-test",
         target_vocab_size=32000,
     )
