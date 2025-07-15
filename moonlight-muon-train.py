@@ -1,5 +1,5 @@
-# # train qwen-like dense model with muon
-# uv run moonlight-muon-train.py --model llama --optimizer muon --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
+# # train llama-like dense model with muon
+# uv run moonlight-muon-train.py --model llama --optimizer muon --dataset openwebtext-100k --hidden_size 896 --lr 1e-3 --max_seq_length 4096
 
 # # train qwen-like dense model with adamw
 # uv run moonlight-muon-train.py --model qwen --optimizer adamw --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
@@ -32,34 +32,38 @@ class MoonDataset(Dataset):
         self._tokenize_texts()
 
     def _tokenize_texts(self):
-        if os.path.exists(f"{self.dataset_name}.bin"):
-            self.tokens = torch.load(f"{self.dataset_name}.bin")
+        # CHANGED: Use max_length in the cache filename
+        cache_file = f"{self.dataset_name}_{self.max_length}.bin"
+        if os.path.exists(cache_file):
+            logger.info(f"Loading tokenized data from {cache_file}")
+            self.tokens = torch.load(cache_file)
         else:
+            logger.info(f"Tokenizing texts and creating cache at {cache_file}")
             for text in tqdm(self.texts, desc="Tokenizing texts"):
                 encoded = self.tokenizer.encode(text, add_special_tokens=True)
                 self.tokens.extend(encoded)
-            torch.save(self.tokens, f"{self.dataset_name}.bin")
+            torch.save(self.tokens, cache_file)
 
     def __len__(self):
         return len(self.tokens) // self.max_length
 
     def __getitem__(self, idx):
-        start_idx = idx * (self.max_length)
-        end_idx = start_idx + (self.max_length)
+        start_idx = idx * self.max_length
+        end_idx = start_idx + self.max_length
         token_slice = self.tokens[start_idx:end_idx]
         data = torch.tensor(token_slice, dtype=torch.long)
         return data
 
 
-def get_model_and_dataloader(model_name, dataset_name, hidden_size):
+def get_model_and_dataloader(model_name, dataset_name, hidden_size, max_seq_length):
     name2path = {
         "openwebtext-100k": "Elriggs/openwebtext-100k",
     }
-    train_dataset = load_dataset(name2path[dataset_name], trust_remote_code=True)
+    train_dataset = load_dataset(name2path[dataset_name])
     tokenizer = AutoTokenizer.from_pretrained(
-        "./tknz/tiny-ko-tokenizer", trust_remote_code=True
+        "./tknz/tiny-ko-tokenizer"
     )
-    train_dataset = MoonDataset(dataset_name, train_dataset, tokenizer)
+    train_dataset = MoonDataset(dataset_name, train_dataset, tokenizer, max_length=max_seq_length)
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 
     if model_name == "qwen":
@@ -72,7 +76,7 @@ def get_model_and_dataloader(model_name, dataset_name, hidden_size):
             hidden_size=hidden_size,
             initializer_range=0.02,
             intermediate_size=4864,
-            max_position_embeddings=513,
+            max_position_embeddings=max_seq_length,
             max_window_layers=12,
             model_type="qwen2",
             num_attention_heads=16,
@@ -98,19 +102,18 @@ def get_model_and_dataloader(model_name, dataset_name, hidden_size):
             num_attention_heads=6,
             num_key_value_heads=2,
             vocab_size=len(tokenizer),
-            max_position_embeddings=513,
+            max_position_embeddings=max_seq_length,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
             rope_theta=10000.0,
             use_cache=False,
+            torch_dtype="bfloat16",
             attn_implementation="flash_attention_2",
         )
-
-        # config._attn_implementation = "flash_attention_2"
         model = LlamaForCausalLM(config)
     else:
         assert 0, f"model {model_name} not supported"
-    return model, train_loader
+    return model, train_loader, tokenizer
 
 
 def get_optimizer(optimizer_name, model, lr=1e-3, wd=0.1):
@@ -152,19 +155,30 @@ if __name__ == "__main__":
     parser.add_argument("--wd", type=float, default=0.1)
     parser.add_argument("--dataset", type=str, default="openwebtext-100k")
     parser.add_argument("--hidden_size", type=int, default=1024)
+    parser.add_argument("--output_dir", type=str, default="./outputs", help="Directory to save the trained model")
+    parser.add_argument("--max_seq_length", type=int, default=512, help="The maximum sequence length for tokenization and model.")
     args = parser.parse_args()
-    logger.add(f"logs/train_{args.model}_{args.optimizer}_lr{args.lr}.log")
+    
+    log_file_name = f"train_{args.model}_{args.optimizer}_lr{args.lr}.log"
+    logger.add(os.path.join("logs", log_file_name))
 
-    model, train_loader = get_model_and_dataloader(
-        args.model, args.dataset, args.hidden_size
+    output_path = os.path.join(args.output_dir, f"{args.model}_{args.optimizer}_lr{args.lr}")
+    os.makedirs(output_path, exist_ok=True)
+    logger.info(f"Model will be saved to: {output_path}")
+
+    model, train_loader, tokenizer = get_model_and_dataloader(
+        args.model, args.dataset, args.hidden_size, args.max_seq_length
     )
     optimizer = get_optimizer(
-        args.optimizer, model, lr=args.lr
+        args.optimizer, model, lr=args.lr, wd=args.wd
     )
+
+    torch.set_float32_matmul_precision('high')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(torch.bfloat16)
     model.to(device)
+    model = torch.compile(model)
 
     model.train()
     epoch = 1
@@ -175,7 +189,7 @@ if __name__ == "__main__":
         num_cycles=0.5,
     )
     for epoch in range(epoch):
-        for step, batch in enumerate(train_loader):
+        for step, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
             batch = batch.to(device)
             input_ids = batch
             outputs = model(input_ids=input_ids, labels=input_ids)
@@ -184,6 +198,11 @@ if __name__ == "__main__":
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad()
-            logger.info(
-                f"Epoch: {epoch} Step: {step} LR: {optimizer.param_groups[0]['lr']} Training loss: {loss.item()}"
-            )
+            if step % 50 == 0:
+                logger.info(
+                    f"Epoch: {epoch} Step: {step} LR: {optimizer.param_groups[0]['lr']:.6f} Training loss: {loss.item():.4f}"
+                )
+    logger.info("Training finished. Saving model and tokenizer...")
+    model.save_pretrained(output_path)
+    tokenizer.save_pretrained(output_path)
+    logger.info(f"Model and tokenizer saved successfully to {output_path}")
