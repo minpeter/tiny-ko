@@ -13,11 +13,29 @@ from tokenizers import (
 from transformers import PreTrainedTokenizerFast, AutoTokenizer
 
 
-def train_and_save_huggingface_tokenizer():
+def train_and_save_huggingface_tokenizer(target_vocab_size: int = 32000):
     """
     Trains a BPE tokenizer using the 'minpeter/tiny-ko-corpus' dataset
     and saves it in a format compatible with the Hugging Face Transformers library.
     """
+
+    # EOS, BOS, PAD, UNK, Instruct tokens를 제외하고, 추가적으로 필요한 토큰을 정의
+    additional_tokens = [
+        # Tokens for tool calls and thinking
+        AddedToken("<tool_call>", special=False, normalized=False),
+        AddedToken("</tool_call>", special=False, normalized=False),
+        AddedToken("<think>", special=False, normalized=False),
+        AddedToken("</think>", special=False, normalized=False),
+        # Reserved special tokens
+        AddedToken("<|unused_special_token_0|>", special=True, normalized=False),
+        AddedToken("<|unused_special_token_1|>", special=True, normalized=False),
+        AddedToken("<|unused_special_token_2|>", special=True, normalized=False),
+        AddedToken("<|unused_special_token_3|>", special=True, normalized=False),
+        AddedToken("<|unused_special_token_4|>", special=True, normalized=False),
+    ]
+
+    vocab_size = target_vocab_size - len(additional_tokens)
+
     # 1. Load Dataset
     ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train[:500]")
 
@@ -25,14 +43,14 @@ def train_and_save_huggingface_tokenizer():
     cosmopedia = load_dataset(
         "HuggingFaceTB/smollm-corpus",
         data_files=[f"cosmopedia-v2/train-{i:05d}-of-00104.parquet" for i in range(21)],
-        split="train[:1000]",
+        split="train[:500]",
     )
     fineweb = load_dataset(
         "HuggingFaceTB/smollm-corpus",
         data_files=[
             f"fineweb-edu-dedup/train-{i:05d}-of-00234.parquet" for i in range(21)
         ],
-        split="train[:1000]",
+        split="train[:500]",
     )
     cosmopedia_text = cosmopedia.remove_columns(
         [col for col in cosmopedia.column_names if col != "text"]
@@ -76,33 +94,6 @@ def train_and_save_huggingface_tokenizer():
     )
 
     tokenizer.decoder = decoders.ByteLevel()
-
-    vocab_size = 32000
-
-    # Define special/additional tokens to add after training
-    additional_tokens = [
-        AddedToken("<|im_start|>", special=True, normalized=False),
-        AddedToken("<|im_end|>", special=True, normalized=False),
-        AddedToken("<|unk_token|>", special=True, normalized=False),
-        AddedToken("<|pad_token|>", special=True, normalized=False),
-        # Tokens for tool calls and thinking
-        AddedToken("<tool_call>", special=False, normalized=False),
-        AddedToken("</tool_call>", special=False, normalized=False),
-        AddedToken("<think>", special=False, normalized=False),
-        AddedToken("</think>", special=False, normalized=False),
-        # Reserved special tokens
-        AddedToken("<|unused_special_token_0|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_1|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_2|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_3|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_4|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_5|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_6|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_7|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_8|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_9|>", special=True, normalized=False),
-    ]
-
     # 3. Set up the Initial Alphabet
     byte_level_alphabet = pre_tokenizers.ByteLevel.alphabet()
 
@@ -126,6 +117,12 @@ def train_and_save_huggingface_tokenizer():
         initial_alphabet=initial_alphabet,
         min_frequency=2,
         max_token_length=30,
+        special_tokens=[
+            "<|endoftext|>",
+            "<|im_start|>",
+            "<|im_end|>",
+
+        ],
     )
 
     print("⏳ Training started...")
@@ -142,9 +139,13 @@ def train_and_save_huggingface_tokenizer():
     print("\n✅ Saving tokenizer in AutoTokenizer compatible format...")
     fast_tokenizer = PreTrainedTokenizerFast(
         tokenizer_object=tokenizer,
-        unk_token="<|unk_token|>",
-        pad_token="<|pad_token|>",
-        eos_token="<|im_end|>",
+        unk_token="<|endoftext|>",
+        pad_token="<|endoftext|>",
+        eos_token="<|endoftext|>",
+        bos_token=None,
+        add_bos_token=False,
+        add_prefix_space=False,
+        split_special_tokens=False,
         # model_max_length=8192,
     )
 
@@ -177,6 +178,9 @@ def train_and_save_huggingface_tokenizer():
     except Exception as e:
         print(f"❌ Failed to load AutoTokenizer: {e}")
 
+    print("Tokenizer total vocab size:", len(loaded_tokenizer))
 
 if __name__ == "__main__":
-    train_and_save_huggingface_tokenizer()
+    train_and_save_huggingface_tokenizer(
+        target_vocab_size=32000,
+    )
