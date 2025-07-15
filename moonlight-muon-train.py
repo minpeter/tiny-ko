@@ -1,26 +1,53 @@
-# RUN COMMAND: time uv run accelerate launch train.py
+# # train qwen-like dense model with muon
+# uv run moonlight-muon-train.py --model qwen --optimizer muon --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
+
+# # train qwen-like dense model with adamw
+# uv run moonlight-muon-train.py --model qwen --optimizer adamw --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
 
 import os
-import torch
 import math
+import torch
+from loguru import logger
+from datasets import load_dataset
+from torch.utils.data import DataLoader, Dataset
 from transformers import (
-    AutoTokenizer,
-    LlamaForCausalLM,
-    LlamaConfig,
-    DataCollatorForLanguageModeling,
-    TrainingArguments,
-    Trainer,
+    Qwen2Config,
+    Qwen2ForCausalLM,
+    Qwen2Tokenizer,
+    get_cosine_schedule_with_warmup,
 )
-from datasets import load_from_disk
+from tqdm import tqdm
 
-# --- 설정 ---
-# preprocess.py에서 저장한 데이터셋 경로
-PROCESSED_DATA_PATH = "./processed_data"
-TOKENIZER_PATH = "./tknz/tiny-ko-tokenizer"
-CONTEXT_LENGTH = 2048
-HF_MODEL_ID = "minpeter/tiny-ko-124m-base-muon"
-LOCAL_MODEL_PATH = "model/tiny-ko-124m-base-muon"
-# ----------------
+
+class MoonDataset(Dataset):
+    def __init__(self, dataset_name, dataset, tokenizer, max_length=512):
+        self.dataset_name = dataset_name
+        self.dataset = dataset
+        self.tokenizer = tokenizer
+        self.texts = dataset["train"]["text"]
+        self.max_length = max_length
+        self.tokens = []
+        self._tokenize_texts()
+
+    def _tokenize_texts(self):
+        if os.path.exists(f"{self.dataset_name}.bin"):
+            self.tokens = torch.load(f"{self.dataset_name}.bin")
+        else:
+            for text in tqdm(self.texts, desc="Tokenizing texts"):
+                encoded = self.tokenizer.encode(text, add_special_tokens=True)
+                self.tokens.extend(encoded)
+            torch.save(self.tokens, f"{self.dataset_name}.bin")
+
+    def __len__(self):
+        return len(self.tokens) // self.max_length
+
+    def __getitem__(self, idx):
+        start_idx = idx * (self.max_length)
+        end_idx = start_idx + (self.max_length)
+        token_slice = self.tokens[start_idx:end_idx]
+        data = torch.tensor(token_slice, dtype=torch.long)
+        return data
+
 
 # This code snippet is a modified version adapted from the following GitHub repository:
 # https://github.com/KellerJordan/Muon/blob/master/muon.py
@@ -218,130 +245,121 @@ class Muon(torch.optim.Optimizer):
         return loss
 
 
-class MuonTrainer(Trainer):  # (추가) 사용자 정의 Trainer
-    def create_optimizer(self):
-        """
-        Setup the optimizer.
+def get_model_and_dataloader(model_name, dataset_name, hidden_size):
+    name2path = {
+        "openwebtext-100k": "Elriggs/openwebtext-100k",
+    }
+    train_dataset = load_dataset(name2path[dataset_name], trust_remote_code=True)
+    if model_name == "qwen":
+        tokenizer = Qwen2Tokenizer.from_pretrained(
+            "Qwen/Qwen2.5-0.5B", trust_remote_code=True
+        )
+    else:
+        assert 0, f"model {model_name} not supported"
+    train_dataset = MoonDataset(dataset_name, train_dataset, tokenizer)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 
-        We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
-        Trainer's init through `optimizers`, or subclass and override this method in a subclass.
-        """
-        if self.optimizer is None:
-            muon_params = [
-                p
-                for name, p in model.named_parameters()
-                if p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name
-            ]
-            adamw_params = [
-                p
-                for name, p in model.named_parameters()
-                if not (
-                    p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name
-                )
-            ]
+    if model_name == "qwen":
+        config = Qwen2Config(
+            attention_dropout=0.0,
+            bos_token_id=151643,
+            eos_token_id=151643,
+            hidden_act="silu",
+            hidden_size=hidden_size,
+            initializer_range=0.02,
+            intermediate_size=4864,
+            max_position_embeddings=513,
+            max_window_layers=12,
+            model_type="qwen2",
+            num_attention_heads=16,
+            num_hidden_layers=12,
+            num_key_value_heads=16,
+            rms_norm_eps=1e-06,
+            rope_theta=1000000.0,
+            sliding_window=1024,
+            tie_word_embeddings=True,
+            torch_dtype="bfloat16",
+            use_cache=True,
+            use_mrope=False,
+            use_sliding_window=False,
+            vocab_size=151936,
+        )
+        model = Qwen2ForCausalLM(config)
+    else:
+        assert 0, f"model {model_name} not supported"
+    return model, train_loader
 
-            self.optimizer = Muon(
-                lr=self.args.learning_rate,
-                wd=self.args.weight_decay,
-                muon_params=muon_params,
-                adamw_params=adamw_params,
+
+def get_optimizer(optimizer_name, model, lr=1e-3, wd=0.1):
+    if optimizer_name == "adamw":
+        return torch.optim.AdamW(
+            model.parameters(), lr=lr, weight_decay=wd, betas=(0.9, 0.95)
+        )
+    elif optimizer_name == "muon":
+        muon_params = [
+            p
+            for name, p in model.named_parameters()
+            if p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name
+        ]
+        adamw_params = [
+            p
+            for name, p in model.named_parameters()
+            if not (
+                p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name
             )
-        return self.optimizer
+        ]
+
+        return Muon(
+            lr=lr,
+            wd=wd,
+            muon_params=muon_params,
+            adamw_params=adamw_params,
+        )
+    else:
+        assert 0, "optimizer not supported"
 
 
-# (추가) Muon 옵티마이저 관련 코드 끝 ####################################
+if __name__ == "__main__":
+    import argparse
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, default="qwen")
+    parser.add_argument("--optimizer", type=str, default="adamw")
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--wd", type=float, default=0.1)
+    parser.add_argument("--dataset", type=str, default="openwebtext-100k")
+    parser.add_argument("--hidden_size", type=int, default=1024)
+    args = parser.parse_args()
+    logger.add(f"logs/train_{args.model}_{args.optimizer}_lr{args.lr}.log")
 
-# 1. 전처리 완료된 데이터셋을 디스크에서 바로 로드
-print(f"사전 처리된 데이터셋을 '{PROCESSED_DATA_PATH}'에서 로드합니다.")
-tokenized_dataset = load_from_disk(PROCESSED_DATA_PATH)
+    model, train_loader = get_model_and_dataloader(
+        args.model, args.dataset, args.hidden_size
+    )
+    optimizer = get_optimizer(
+        args.optimizer, model, lr=args.lr
+    )
 
-print("\n로딩 완료된 데이터셋 구조:")
-print(tokenized_dataset)
-print(f"훈련 샘플 수: {len(tokenized_dataset['train'])}")
-print(f"테스트 샘플 수: {len(tokenized_dataset['test'])}")
-print(f"샘플 0의 토큰 수: {len(tokenized_dataset['train'][0]['input_ids'])}")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
 
-# 2. 토크나이저 로드
-tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
-# tokenizer.model_max_length = CONTEXT_LENGTH
-
-try:
-    print(f"\n사용될 EOS 토큰: '{tokenizer.eos_token}', ID: {tokenizer.eos_token_id}")
-    print(f"사용될 PAD 토큰: '{tokenizer.pad_token}', ID: {tokenizer.pad_token_id}")
-    print(f"사용될 BOS 토큰: '{tokenizer.bos_token}', ID: {tokenizer.bos_token_id}")
-except AttributeError as e:
-    print(e)
-
-# 3. 모델 구성 (Config)
-config = LlamaConfig(
-    hidden_size=480,
-    num_hidden_layers=32,
-    intermediate_size=1920,
-    tie_word_embeddings=True,
-    num_attention_heads=6,
-    num_key_value_heads=2,
-    vocab_size=len(tokenizer),
-    max_position_embeddings=CONTEXT_LENGTH,
-    pad_token_id=tokenizer.pad_token_id,
-    eos_token_id=tokenizer.eos_token_id,
-    rope_theta=10000.0,
-    use_cache=False,
-    attn_implementation="flash_attention_2",
-)
-
-# 4. 모델 초기화
-config._attn_implementation = "flash_attention_2"
-model = LlamaForCausalLM(config)
-model = model.to(torch.bfloat16)
-
-model_size = sum(t.numel() for t in model.parameters())
-print(f"\n모델 크기: {model_size/1000**3:.2f}B parameters")
-
-# 5. 데이터 콜레이터, 토크나이저 저장 및 푸시
-data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
-os.makedirs(LOCAL_MODEL_PATH, exist_ok=True)
-tokenizer.save_pretrained(LOCAL_MODEL_PATH)
-tokenizer.push_to_hub(HF_MODEL_ID)
-
-# 6. 학습 인자 (TrainingArguments) 설정
-max_cpu_count = int(os.cpu_count() / 3) or 1
-args = TrainingArguments(
-    output_dir=LOCAL_MODEL_PATH,
-    push_to_hub=True,  # 필요시 주석 해제
-    hub_model_id=HF_MODEL_ID,
-    hub_strategy="every_save",
-    eval_strategy="steps",
-    save_strategy="steps",
-    eval_steps=1_000,
-    save_steps=1_000,
-    gradient_accumulation_steps=2,
-    per_device_train_batch_size=39,
-    per_device_eval_batch_size=39,
-    logging_steps=25,
-    num_train_epochs=1,
-    weight_decay=0.1,
-    warmup_ratio=0.05,
-    lr_scheduler_type="cosine",  # warmup_stable_decay
-    learning_rate=6e-4,
-    # optim="adamw_torch_fused", # (수정) MuonTrainer가 옵티마이저를 생성하므로 이 인자는 제거합니다.
-    dataloader_pin_memory=True,
-    bf16=True,
-    torch_compile=True,
-    dataloader_num_workers=max_cpu_count,
-    save_total_limit=5,
-    load_best_model_at_end=True,
-    metric_for_best_model="eval_loss",
-    greater_is_better=False,
-)
-
-# 7. 트레이너(Trainer) 초기화 및 학습 시작
-trainer = MuonTrainer(  # (수정) Trainer 대신 MuonTrainer를 사용합니다.
-    model=model,
-    args=args,
-    data_collator=data_collator,
-    train_dataset=tokenized_dataset["train"],
-    eval_dataset=tokenized_dataset["test"],
-)
-
-trainer.train()
+    model.train()
+    epoch = 1
+    lr_scheduler = get_cosine_schedule_with_warmup(
+        optimizer=optimizer,
+        num_warmup_steps=100,
+        num_training_steps=len(train_loader) * epoch,
+        num_cycles=0.5,
+    )
+    for epoch in range(epoch):
+        for step, batch in enumerate(train_loader):
+            batch = batch.to(device)
+            input_ids = batch
+            outputs = model(input_ids=input_ids, labels=input_ids)
+            loss = outputs.loss
+            loss.backward()
+            optimizer.step()
+            lr_scheduler.step()
+            optimizer.zero_grad()
+            logger.info(
+                f"Epoch: {epoch} Step: {step} LR: {optimizer.param_groups[0]['lr']} Training loss: {loss.item()}"
+            )

@@ -14,9 +14,11 @@ wheels/
 wandb
 tiny-random
 ouputs
+output
 outputs
 model
 last_run_prepared
 tknz
 lm-eval-result
 processed_data
+logs
