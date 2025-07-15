@@ -31,7 +31,6 @@ def train_and_save_huggingface_tokenizer(target_vocab_size: int = 32000):
         AddedToken("<|unused_special_token_1|>", special=True, normalized=False),
         AddedToken("<|unused_special_token_2|>", special=True, normalized=False),
         AddedToken("<|unused_special_token_3|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_4|>", special=True, normalized=False),
     ]
 
     vocab_size = target_vocab_size - len(additional_tokens)
