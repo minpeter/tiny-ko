@@ -18,8 +18,8 @@ from datasets import load_from_disk
 PROCESSED_DATA_PATH = "./processed_data"
 TOKENIZER_PATH = "./tknz/tiny-ko-tokenizer"
 CONTEXT_LENGTH = 2048
-HF_MODEL_ID = "minpeter/tiny-ko-124m-base-muon"
-LOCAL_MODEL_PATH = "model/tiny-ko-124m-base-muon"
+HF_MODEL_ID = "minpeter/test"
+LOCAL_MODEL_PATH = "model/test"
 # ----------------
 
 # This code snippet is a modified version adapted from the following GitHub repository:

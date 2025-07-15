@@ -160,6 +160,6 @@ if __name__ == "__main__":
 
     train_and_save_huggingface_tokenizer(
         dataset=dataset,
-        output_dir="./tknz/tiny-ko-tokenizer-test",
+        output_dir="./tknz/tiny-ko-tokenizer",
         target_vocab_size=32000,
     )
