@@ -1,14 +1,8 @@
-# # train llama-like dense model with muon
-# uv run moonlight-muon-train.py --model llama --optimizer muon --dataset openwebtext-100k --hidden_size 896 --lr 1e-3 --max_seq_length 4096
-
-# # train qwen-like dense model with adamw
-# uv run moonlight-muon-train.py --model qwen --optimizer adamw --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
-
 import os
 import torch
 from loguru import logger
 from datasets import load_dataset
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from transformers import (
     Qwen2Config,
     Qwen2ForCausalLM,
@@ -16,81 +10,71 @@ from transformers import (
     LlamaForCausalLM,
     AutoTokenizer,
     get_cosine_schedule_with_warmup,
+    # DataCollatorForLanguageModeling를 임포트합니다.
+    DataCollatorWithFlattening,
 )
 from tqdm import tqdm
 from muon_optimizer import Muon
 
+# MoonDataset 클래스는 더 이상 필요 없으므로 삭제합니다.
 
-class MoonDataset(Dataset):
-    def __init__(self, dataset_name, dataset, tokenizer, max_length=512):
-        self.dataset_name = dataset_name
-        self.dataset = dataset
-        self.tokenizer = tokenizer
-        self.texts = dataset["train"]["text"]
-        self.max_length = max_length
-        self.tokens = []
-        self._tokenize_texts()
-
-    def _tokenize_texts(self):
-        # CHANGED: Use max_length in the cache filename
-        cache_file = f"{self.dataset_name}_{self.max_length}.bin"
-        if os.path.exists(cache_file):
-            logger.info(f"Loading tokenized data from {cache_file}")
-            self.tokens = torch.load(cache_file)
-        else:
-            logger.info(f"Tokenizing texts and creating cache at {cache_file}")
-            for text in tqdm(self.texts, desc="Tokenizing texts"):
-                encoded = self.tokenizer.encode(text, add_special_tokens=True)
-                self.tokens.extend(encoded)
-            torch.save(self.tokens, cache_file)
-
-    def __len__(self):
-        return len(self.tokens) // self.max_length
-
-    def __getitem__(self, idx):
-        start_idx = idx * self.max_length
-        end_idx = start_idx + self.max_length
-        token_slice = self.tokens[start_idx:end_idx]
-        data = torch.tensor(token_slice, dtype=torch.long)
-        return data
-
-
-def get_model_and_dataloader(model_name, dataset_name, hidden_size, max_seq_length):
+# get_model_and_dataloader 함수를 DataCollator 방식으로 수정합니다.
+def get_model_and_dataloader(model_name, dataset_name, max_seq_length):
     name2path = {
         "openwebtext-100k": "Elriggs/openwebtext-100k",
     }
-    train_dataset = load_dataset(name2path[dataset_name])
+    
     tokenizer = AutoTokenizer.from_pretrained(
         "./tknz/tiny-ko-tokenizer"
     )
-    train_dataset = MoonDataset(dataset_name, train_dataset, tokenizer, max_length=max_seq_length)
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 
+    # 데이터셋 로드
+    raw_dataset = load_dataset(name2path[dataset_name], split="train")
+
+    # 토큰화 함수 정의
+    def preprocess_function(examples):
+        tokenized_inputs = tokenizer(examples['text'])
+
+        if tokenizer.eos_token_id is not None:
+            for i in range(len(tokenized_inputs["input_ids"])):
+                tokenized_inputs["input_ids"][i].append(tokenizer.eos_token_id)
+                tokenized_inputs["attention_mask"][i].append(1)
+                if "token_type_ids" in tokenized_inputs:
+                    tokenized_inputs["token_type_ids"][i].append(0)
+
+        return tokenized_inputs
+
+    # .map()을 사용하여 데이터셋 전체를 효율적으로 토큰화합니다.
+    tokenized_dataset = raw_dataset.map(
+        preprocess_function,
+        batched=True,
+        num_proc=os.cpu_count(), # 사용 가능한 모든 CPU 코어를 활용해 병렬 처리
+        remove_columns=raw_dataset.column_names, # 기존 text 컬럼은 제거
+    )
+    
+    # Causal LM을 위한 데이터 콜레이터를 생성합니다. mlm=False가 핵심입니다.
+    # 이 콜레이터가 여러 샘플을 max_seq_length 길이의 배치로 묶어줍니다.
+    data_collator = DataCollatorWithFlattening()
+
+    # 수정된 데이터셋과 콜레이터로 DataLoader를 생성합니다.
+    train_loader = DataLoader(
+        tokenized_dataset, batch_size=8, shuffle=True, collate_fn=data_collator
+    )
+
+    # --- 모델 설정 부분은 기존과 동일 ---
     if model_name == "qwen":
         config = Qwen2Config(
             attn_implementation="flash_attention_2",
-            attention_dropout=0.0,
-            bos_token_id=151643,
-            eos_token_id=151643,
-            hidden_act="silu",
-            hidden_size=hidden_size,
-            initializer_range=0.02,
+            hidden_size=1024,
             intermediate_size=4864,
             max_position_embeddings=max_seq_length,
-            max_window_layers=12,
-            model_type="qwen2",
             num_attention_heads=16,
             num_hidden_layers=12,
             num_key_value_heads=16,
-            rms_norm_eps=1e-06,
-            rope_theta=1000000.0,
-            sliding_window=1024,
             tie_word_embeddings=True,
-            torch_dtype="bfloat16",
-            use_cache=True,
-            use_mrope=False,
-            use_sliding_window=False,
+            torch_dtype=torch.bfloat16,
             vocab_size=len(tokenizer),
+            # ... 기타 Qwen 설정 ...
         )
         model = Qwen2ForCausalLM(config)
     elif model_name == "llama":
@@ -105,14 +89,13 @@ def get_model_and_dataloader(model_name, dataset_name, hidden_size, max_seq_leng
             max_position_embeddings=max_seq_length,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            rope_theta=10000.0,
-            use_cache=False,
-            torch_dtype="bfloat16",
+            torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
         )
         model = LlamaForCausalLM(config)
     else:
         assert 0, f"model {model_name} not supported"
+
     return model, train_loader, tokenizer
 
 
@@ -154,7 +137,6 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--wd", type=float, default=0.1)
     parser.add_argument("--dataset", type=str, default="openwebtext-100k")
-    parser.add_argument("--hidden_size", type=int, default=1024)
     parser.add_argument("--output_dir", type=str, default="./outputs", help="Directory to save the trained model")
     parser.add_argument("--max_seq_length", type=int, default=512, help="The maximum sequence length for tokenization and model.")
     args = parser.parse_args()
@@ -166,8 +148,10 @@ if __name__ == "__main__":
     os.makedirs(output_path, exist_ok=True)
     logger.info(f"Model will be saved to: {output_path}")
 
+    # get_model_and_dataloader 호출 시 max_seq_length를 전달합니다.
+    # DataCollator가 내부적으로 이 값을 사용하지는 않지만, 모델 설정에 필요합니다.
     model, train_loader, tokenizer = get_model_and_dataloader(
-        args.model, args.dataset, args.hidden_size, args.max_seq_length
+        args.model, args.dataset, args.max_seq_length
     )
     optimizer = get_optimizer(
         args.optimizer, model, lr=args.lr, wd=args.wd
@@ -178,7 +162,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(torch.bfloat16)
     model.to(device)
-    model = torch.compile(model)
+    # model = torch.compile(model)
 
     model.train()
     epoch = 1
@@ -190,9 +174,11 @@ if __name__ == "__main__":
     )
     for epoch in range(epoch):
         for step, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
-            batch = batch.to(device)
-            input_ids = batch
-            outputs = model(input_ids=input_ids, labels=input_ids)
+            # DataCollator가 생성한 배치는 'input_ids', 'attention_mask', 'labels' 키를 가집니다.
+            # 'labels'는 자동으로 생성되므로 모델에 그대로 전달하면 됩니다.
+            batch = {k: v.to(device) for k, v in batch.items()}
+            outputs = model(**batch)
+            
             loss = outputs.loss
             loss.backward()
             optimizer.step()

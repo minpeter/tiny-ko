@@ -2,9 +2,9 @@ import os
 import torch
 from transformers import LlamaConfig, LlamaForCausalLM, AutoTokenizer
 from transformers import DataCollatorWithFlattening
-from transformers import TrainingArguments, Trainer
+from transformers import TrainingArguments, Trainer, get_scheduler
 from datasets import load_dataset
-
+from muon_optimizer import create_muon_optimizer
 
 max_seq_length = 4096
 tokenizer = AutoTokenizer.from_pretrained(
@@ -61,19 +61,36 @@ data_collator = DataCollatorWithFlattening()
 train_args = TrainingArguments(
     output_dir="./outputs/test",
     bf16=True,
-    per_device_train_batch_size=8,
+    # per_device_train_batch_size=8,
+    auto_find_batch_size=True,
     torch_compile=True,
     logging_steps=50,
-    learning_rate=1e-3,
     warmup_steps=100,
     lr_scheduler_type="cosine",
-    dataloader_num_workers=os.cpu_count(),
-    dataloader_pin_memory=True
+    dataloader_pin_memory=True,
+    dataloader_num_workers=8,
+    dataloader_prefetch_factor=8,
+    dataloader_persistent_workers=True,
 )
+
+
+learning_rate = 1e-3
+weight_decay = 0.1
+optimizer = create_muon_optimizer(model, lr=learning_rate, wd=weight_decay)
+num_training_steps = len(tokenized_dataset) // (train_args.per_device_train_batch_size * train_args.gradient_accumulation_steps)
+lr_scheduler = get_scheduler(
+    name="cosine",
+    optimizer=optimizer,
+    num_warmup_steps=100,
+    num_training_steps=num_training_steps,
+)
+
+
 trainer = Trainer(
     args=train_args,
     model=model,
     train_dataset=tokenized_dataset,
-    data_collator=data_collator
+    data_collator=data_collator,
+    optimizers=(optimizer, lr_scheduler)
 )
 trainer.train()

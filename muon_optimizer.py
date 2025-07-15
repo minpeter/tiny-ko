@@ -195,3 +195,30 @@ class Muon(torch.optim.Optimizer):
                 p.data.add_(g, alpha=-lr / scale)
 
         return loss
+    
+def create_muon_optimizer(model, lr=1e-3, wd=0.1):
+    """
+    Splits the model parameters and creates a Muon optimizer.
+    """
+    # 1. Split parameters into groups for Muon and AdamW.
+    #    - muon_params: Parameters that are 2D or higher tensors (matrices) and are not embeddings or LM head weights. Typically attention and MLP weights.
+    #    - adamw_params: All other parameters. Typically biases, LayerNorm, and embedding weights.
+    muon_params = [
+        p
+        for name, p in model.named_parameters()
+        if p.requires_grad and p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name
+    ]
+    adamw_params = [
+        p
+        for name, p in model.named_parameters()
+        if p.requires_grad and not (
+            p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name
+        )
+    ]
+
+    return Muon(
+        lr=lr,
+        wd=wd,
+        muon_params=muon_params,
+        adamw_params=adamw_params,
+    )
