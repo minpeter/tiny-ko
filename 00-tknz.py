@@ -20,6 +20,9 @@ def train_and_save_huggingface_tokenizer(
 ):
     # Define additional tokens needed, excluding EOS, BOS, PAD, UNK, and instruct tokens
     additional_tokens = [
+        "<|endoftext|>",
+        "<|im_start|>",
+        "<|im_end|>",
         # Tokens for tool calls and thinking
         AddedToken("<tool_call>", special=False, normalized=False),
         AddedToken("</tool_call>", special=False, normalized=False),
@@ -66,12 +69,9 @@ def train_and_save_huggingface_tokenizer(
         initial_alphabet=initial_alphabet,
         min_frequency=2,
         max_token_length=30,
-        special_tokens=[
-            "<|endoftext|>",
-            "<|im_start|>",
-            "<|im_end|>",
+        # special_tokens=[
 
-        ],
+        # ],
     )
 
     print("⏳ Training started...")
