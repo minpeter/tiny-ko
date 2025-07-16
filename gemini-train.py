@@ -14,6 +14,7 @@ from transformers import (
     TrainingArguments,
     DataCollatorForLanguageModeling,
 )
+from muon_optimizer import create_muon_optimizer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,6 +32,9 @@ def main():
     parser.add_argument("--use_flash_attention_2", action="store_true", help="Flash Attention 2 사용 여부.")
     parser.add_argument("--packing", action="store_true", help="시퀀스 패킹 사용 여부.")
     parser.add_argument("--max_seq_length", type=int, default=8192, help="모델의 최대 시퀀스 길이 (block size).")
+    # weight_decay
+    parser.add_argument("--weight_decay", type=float, default=0.1, help="옵티마이저의 weight decay 값.")
+    parser.add_argument("--optimizer", type=str, default="muon", choices=["adamw", "muon"], help="사용할 옵티마이저 종류.")
 
     args = parser.parse_args()
 
@@ -66,7 +70,6 @@ def main():
     config.bos_token_id = tokenizer.eos_token_id # Qwen 스타일로, 모델 설정의 BOS만 이렇게 설정, 실제로는 사용 X
     config.eos_token_id = tokenizer.eos_token_id
     if args.use_flash_attention_2:
-        # config.attn_implementation = "flash_attention_2"
         config._attn_implementation = "flash_attention_2"
 
     attn_implementation = "flash_attention_2" if args.use_flash_attention_2 else "eager"
@@ -82,7 +85,22 @@ def main():
     model.to(torch.bfloat16)
     model.to(device)
     
-    # 4. 데이터셋 준비 및 처리
+    if args.optimizer == "muon":
+        logger.info("Muon 옵티마이저를 생성합니다.")
+        optimizer = create_muon_optimizer(
+            model, 
+            lr=args.learning_rate, 
+            wd=args.weight_decay,
+        )
+    else:
+        logger.info("AdamW 옵티마이저를 생성합니다.")
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay,
+            betas=(0.9, 0.95)
+        )
+    
     logger.info("데이터셋 로딩 및 처리 중...")
 
     try:
@@ -90,7 +108,6 @@ def main():
     except Exception as e:
       raw_datasets = load_dataset(args.dataset_path, split="train[:10000]")
     
-    # 토크나이즈 함수
     def tokenize_function(examples):
         return tokenizer(examples["text"], padding=False, truncation=False)
 
@@ -101,10 +118,8 @@ def main():
         remove_columns=["text"],
     )
 
-    # block_size = tokenizer.model_max_length
     block_size = args.max_seq_length
 
-    # 그룹화 함수 (시퀀스 패킹의 기초)
     def group_texts(examples):
         concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
         total_length = len(concatenated_examples["input_ids"])
@@ -135,7 +150,6 @@ def main():
 
     # 6. Trainer 설정
     training_args = TrainingArguments(
-        # bs 16
         output_dir=args.output_dir,
         overwrite_output_dir=True,
         do_train=True,
@@ -143,7 +157,8 @@ def main():
         auto_find_batch_size=True,
         num_train_epochs=args.num_train_epochs,
         learning_rate=args.learning_rate,
-        weight_decay=0.01,
+        # --- Muon이 weight decay를 자체 처리하므로 Trainer에서는 0으로 설정 ---
+        weight_decay=0.0,
         logging_dir=f"{args.output_dir}/logs",
         logging_steps=1,
         save_steps=500,
@@ -151,15 +166,13 @@ def main():
         bf16=True,
         dataloader_num_workers=16,
         dataloader_prefetch_factor=2,
-        dataloader_drop_last=True,  # 배치 크기를 일정하게 유지
-        remove_unused_columns=False,  # 필요한 컬럼 유지
-        # torch_compile=True, # torch.compile is not compatible with FA2 (?)
+        dataloader_drop_last=True,
+        remove_unused_columns=False,
     )
 
     lm_datasets = lm_datasets['train'] if 'train' in lm_datasets else lm_datasets
 
     print(lm_datasets)
-    # print(lm_datasets[0])
     print("Collated batch example:")
     sample_batch = [lm_datasets[i] for i in range(min(2, len(lm_datasets)))]
     batch = data_collator(sample_batch)
@@ -170,14 +183,16 @@ def main():
         else:
             print(f"{key}: {value}")
 
+    # optimizers는 (optimizer, scheduler) 튜플 형태입니다.
+    # scheduler를 None으로 지정하면 Trainer가 training_args에 따라 기본 스케줄러를 생성합니다.
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=lm_datasets,
         data_collator=data_collator,
+        optimizers=(optimizer, None),
     )
 
-    # 7. 훈련 시작
     logger.info("사전학습을 시작합니다.")
     trainer.train()
 
