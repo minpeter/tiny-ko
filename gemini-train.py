@@ -26,7 +26,6 @@ def main():
     parser.add_argument("--output_dir", type=str, default="./pretrain_output", help="모델 체크포인트와 결과를 저장할 디렉토리.")
     parser.add_argument("--model_config_name", type=str, default="small", help="사용할 모델 크기 설정 (small, medium, large).")
 
-    parser.add_argument("--batch_size", type=int, default=8, help="디바이스당 훈련 배치 크기.")
     parser.add_argument("--num_train_epochs", type=int, default=1, help="총 훈련 에포크 수.")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="학습률.")
     parser.add_argument("--use_flash_attention_2", action="store_true", help="Flash Attention 2 사용 여부.")
@@ -50,8 +49,8 @@ def main():
     model_configs = {
         "small": LlamaConfig(initializer_range=(1/ math.sqrt(768)), hidden_size=768, num_hidden_layers=25, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
         "smollm": LlamaConfig(hidden_size=576, num_hidden_layers=30, intermediate_size=1536, tie_word_embeddings=True, num_attention_heads=9, num_key_value_heads=3),
-        "medium": LlamaConfig(hidden_size=768, num_hidden_layers=29, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
-        "large": LlamaConfig(hidden_size=2048, num_hidden_layers=24, num_attention_heads=16, intermediate_size=5504),
+        # "medium": LlamaConfig(hidden_size=768, num_hidden_layers=29, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
+        # "large": LlamaConfig(hidden_size=2048, num_hidden_layers=24, num_attention_heads=16, intermediate_size=5504),
     }
     config = model_configs.get(args.model_config_name, model_configs["small"])
     config.torch_dtype = torch.bfloat16
@@ -103,13 +102,22 @@ def main():
     
     logger.info("데이터셋 로딩 및 처리 중...")
 
-    try:
-      raw_datasets = load_dataset("text", data_files={"train": os.path.join(args.dataset_path, "*.txt")})
-    except Exception as e:
+    if os.path.exists(args.dataset_path):
+        raw_datasets = load_dataset("text", data_files={"train": os.path.join(args.dataset_path, "*.txt")})
+    else:
       raw_datasets = load_dataset(args.dataset_path, split="train[:10000]")
     
     def tokenize_function(examples):
-        return tokenizer(examples["text"], padding=False, truncation=False)
+        tokenized_inputs = tokenizer(examples["text"], padding=False, truncation=False)
+
+        if tokenizer.eos_token_id is not None:
+            for i in range(len(tokenized_inputs["input_ids"])):
+                tokenized_inputs["input_ids"][i].append(tokenizer.eos_token_id)
+                tokenized_inputs["attention_mask"][i].append(1)
+                if "token_type_ids" in tokenized_inputs:
+                    tokenized_inputs["token_type_ids"][i].append(0)
+
+        return tokenized_inputs
 
     tokenized_datasets = raw_datasets.map(
         tokenize_function,
@@ -153,7 +161,6 @@ def main():
         output_dir=args.output_dir,
         overwrite_output_dir=True,
         do_train=True,
-        # per_device_train_batch_size=args.batch_size,
         auto_find_batch_size=True,
         num_train_epochs=args.num_train_epochs,
         learning_rate=args.learning_rate,
@@ -183,8 +190,6 @@ def main():
         else:
             print(f"{key}: {value}")
 
-    # optimizers는 (optimizer, scheduler) 튜플 형태입니다.
-    # scheduler를 None으로 지정하면 Trainer가 training_args에 따라 기본 스케줄러를 생성합니다.
     trainer = Trainer(
         model=model,
         args=training_args,

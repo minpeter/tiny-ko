@@ -40,10 +40,10 @@ def main():
 
     # 텍스트 생성에 사용할 옵션을 설정합니다.
     generation_config = GenerationConfig(
-        max_new_tokens=256,
-        do_sample=True,
-        top_p=0.9,
-        temperature=0.7,
+        max_new_tokens=pipeline.model.config.max_position_embeddings,
+        # do_sample=True,
+        # top_p=0.9,
+        # temperature=0.7,
         pad_token_id=tokenizer.eos_token_id  # pad_token_id를 eos_token_id로 설정하여 경고를 방지합니다.
     )
 
