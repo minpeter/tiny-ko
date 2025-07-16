@@ -57,7 +57,7 @@ def main():
     config.vocab_size = len(tokenizer)
     config.use_cache = False
     config.pad_token_id = tokenizer.pad_token_id
-    # config.bos_token_id = tokenizer.bos_token_id
+    config.bos_token_id = tokenizer.eos_token_id # Qwen 스타일로, 모델 설정의 BOS만 이렇게 설정, 실제로는 사용 X
     config.eos_token_id = tokenizer.eos_token_id
     if args.use_flash_attention_2:
         # config.attn_implementation = "flash_attention_2"
@@ -140,6 +140,7 @@ def main():
         dataloader_prefetch_factor=2,
         dataloader_drop_last=True,  # 배치 크기를 일정하게 유지
         remove_unused_columns=False,  # 필요한 컬럼 유지
+        torch_compile=True,
     )
 
     lm_datasets = lm_datasets['train'] if 'train' in lm_datasets else lm_datasets
@@ -172,5 +173,4 @@ def main():
     trainer.save_model(args.output_dir)
 
 if __name__ == "__main__":
-    
     main()
