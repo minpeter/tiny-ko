@@ -1,11 +1,10 @@
 import argparse
 import logging
-import os
-from itertools import chain
 import math
+import os
 
 import torch
-from datasets import load_dataset
+from datasets import load_from_disk
 from transformers import (
     LlamaConfig,
     LlamaForCausalLM,
@@ -34,6 +33,8 @@ def main():
     # weight_decay
     parser.add_argument("--weight_decay", type=float, default=0.1, help="옵티마이저의 weight decay 값.")
     parser.add_argument("--optimizer", type=str, default="muon", choices=["adamw", "muon"], help="사용할 옵티마이저 종류.")
+    # upload hf model id
+    parser.add_argument("--hf_model_id", type=str, default=None, help="Hugging Face 모델 ID.")
 
     args = parser.parse_args()
 
@@ -100,52 +101,14 @@ def main():
             betas=(0.9, 0.95)
         )
     
-    logger.info("데이터셋 로딩 및 처리 중...")
-
-    if os.path.exists(args.dataset_path):
-        raw_datasets = load_dataset("text", data_files={"train": os.path.join(args.dataset_path, "*.txt")})
-    else:
-      raw_datasets = load_dataset(args.dataset_path, split="train[:10000]")
+    logger.info("Preprocessing 데이터셋...")
+    lm_datasets = load_from_disk(args.dataset_path)
     
-    def tokenize_function(examples):
-        tokenized_inputs = tokenizer(examples["text"], padding=False, truncation=False)
-
-        if tokenizer.eos_token_id is not None:
-            for i in range(len(tokenized_inputs["input_ids"])):
-                tokenized_inputs["input_ids"][i].append(tokenizer.eos_token_id)
-                tokenized_inputs["attention_mask"][i].append(1)
-                if "token_type_ids" in tokenized_inputs:
-                    tokenized_inputs["token_type_ids"][i].append(0)
-
-        return tokenized_inputs
-
-    tokenized_datasets = raw_datasets.map(
-        tokenize_function,
-        batched=True,
-        num_proc=os.cpu_count(),
-        remove_columns=["text"],
-    )
-
-    block_size = args.max_seq_length
-
-    def group_texts(examples):
-        concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
-        total_length = len(concatenated_examples["input_ids"])
-        if total_length >= block_size:
-            total_length = (total_length // block_size) * block_size
-        
-        result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-            for k, t in concatenated_examples.items()
-        }
-        result["labels"] = result["input_ids"].copy()
-        return result
-        
-    lm_datasets = tokenized_datasets.map(
-        group_texts,
-        batched=True,
-        num_proc=os.cpu_count(),
-    )
+    print("\n로딩 완료된 데이터셋 구조:")
+    print(lm_datasets)
+    print(f"훈련 샘플 수: {len(lm_datasets['train'])}")
+    print(f"테스트 샘플 수: {len(lm_datasets['test'])}")
+    print(f"샘플 0의 토큰 수: {len(lm_datasets['train'][0]['input_ids'])}")
 
     # 5. 데이터 콜레이터 설정
     if args.packing and args.use_flash_attention_2:
@@ -155,6 +118,24 @@ def main():
     else:
         logger.info("표준 언어 모델링 데이터 콜레이터를 사용합니다.")
         data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+
+    print(lm_datasets["train"])
+    print("Collated batch example:")
+    sample_batch = [lm_datasets["train"][i] for i in range(min(2, len(lm_datasets["train"])))]
+    batch = data_collator(sample_batch)
+    for key, value in batch.items():
+        if isinstance(value, torch.Tensor):
+            print(f"{key}: {value.shape}")
+            print(value)
+        else:
+            print(f"{key}: {value}")
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    tokenizer.save_pretrained(args.output_dir)
+    if args.hf_model_id:
+        logger.info(f"Hugging Face 모델 ID '{args.hf_model_id}'에 토크나이저를 푸시합니다.")
+        tokenizer.push_to_hub(args.hf_model_id)
 
     # 6. Trainer 설정
     training_args = TrainingArguments(
@@ -177,34 +158,16 @@ def main():
         remove_unused_columns=False,
     )
 
-    lm_datasets = lm_datasets['train'] if 'train' in lm_datasets else lm_datasets
-
-    print(lm_datasets)
-    print("Collated batch example:")
-    sample_batch = [lm_datasets[i] for i in range(min(2, len(lm_datasets)))]
-    batch = data_collator(sample_batch)
-    for key, value in batch.items():
-        if isinstance(value, torch.Tensor):
-            print(f"{key}: {value.shape}")
-            print(value)
-        else:
-            print(f"{key}: {value}")
-
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=lm_datasets,
+        train_dataset=lm_datasets["train"],
+        eval_dataset=lm_datasets["test"],
         data_collator=data_collator,
         optimizers=(optimizer, None),
     )
 
-    logger.info("사전학습을 시작합니다.")
     trainer.train()
-
-    # 8. 최종 모델 저장
-    logger.info("훈련 완료. 최종 모델을 저장합니다.")
-    trainer.save_model(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
 
 if __name__ == "__main__":
     main()
