@@ -1,5 +1,5 @@
 from transformers import AutoTokenizer
-from transformers import DataCollatorWithFlattening
+from transformers import DataCollatorWithFlattening, DataCollatorForLanguageModeling
 from datasets import Dataset
 
 
@@ -29,12 +29,8 @@ tokenized_dataset = train_dataset.map(
     batched=True,
 )
 
-data_collator = DataCollatorWithFlattening()
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
 collated_batch = data_collator(tokenized_dataset)
 
-print("Collated batch:")
-for key, value in collated_batch.items():
-    print(f"{key}:")
-    print(value)
-    print()
+print(collated_batch)  # Fallback to printing the entire batch if there's an error

@@ -5,6 +5,7 @@ from itertools import chain
 
 import torch
 from datasets import load_dataset
+import pprint
 from transformers import (
     LlamaConfig,
     LlamaForCausalLM,
@@ -30,6 +31,8 @@ def main():
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="학습률.")
     parser.add_argument("--use_flash_attention_2", action="store_true", help="Flash Attention 2 사용 여부.")
     parser.add_argument("--packing", action="store_true", help="시퀀스 패킹 사용 여부.")
+    # model_max_length
+    parser.add_argument("--max_seq_length", type=int, default=8192, help="모델의 최대 시퀀스 길이 (block size).")
 
     args = parser.parse_args()
 
@@ -39,33 +42,45 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    print('tokenizer.vocab_size:', tokenizer.vocab_size)
+    print('len(tokenizer):', len(tokenizer))
+
     # 2. 모델 구성 정의
     model_configs = {
-        "small": LlamaConfig(hidden_size=768, num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072, max_position_embeddings=4096),
-        "medium": LlamaConfig(hidden_size=1024, num_hidden_layers=24, num_attention_heads=16, intermediate_size=4096, max_position_embeddings=4096),
-        "large": LlamaConfig(hidden_size=2048, num_hidden_layers=24, num_attention_heads=16, intermediate_size=5504, max_position_embeddings=4096),
+        "small": LlamaConfig(hidden_size=768, num_hidden_layers=29, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
+        "medium": LlamaConfig(hidden_size=1024, num_hidden_layers=24, num_attention_heads=16, intermediate_size=4096),
+        "large": LlamaConfig(hidden_size=2048, num_hidden_layers=24, num_attention_heads=16, intermediate_size=5504),
     }
     config = model_configs.get(args.model_config_name, model_configs["small"])
-    config.vocab_size = tokenizer.vocab_size
+    config.max_position_embeddings = args.max_seq_length
+    config.torch_dtype = torch.bfloat16
+    config.vocab_size = len(tokenizer)
+    config.use_cache = False
     config.pad_token_id = tokenizer.pad_token_id
-    config.bos_token_id = tokenizer.bos_token_id
+    # config.bos_token_id = tokenizer.bos_token_id
     config.eos_token_id = tokenizer.eos_token_id
     if args.use_flash_attention_2:
-        config.attn_implementation = "flash_attention_2"
+        # config.attn_implementation = "flash_attention_2"
+        config._attn_implementation = "flash_attention_2"
 
-    # 3. 모델 초기화 (무작위 가중치)
     attn_implementation = "flash_attention_2" if args.use_flash_attention_2 else "eager"
     logger.info(f"'{args.model_config_name}' 설정으로 모델 초기화 중... (Attention: {attn_implementation})")
     model = LlamaForCausalLM(config)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(torch.bfloat16)
+    model.to(device)
     
     # 4. 데이터셋 준비 및 처리
     logger.info("데이터셋 로딩 및 처리 중...")
-    # raw_datasets = load_dataset("text", data_files={"train": os.path.join(args.dataset_path, "*.txt")})
-    raw_datasets = load_dataset(args.dataset_path, split="train")
+
+    try:
+      raw_datasets = load_dataset("text", data_files={"train": os.path.join(args.dataset_path, "*.txt")})
+    except Exception as e:
+      raw_datasets = load_dataset(args.dataset_path, split="train[:10000]")
     
     # 토크나이즈 함수
     def tokenize_function(examples):
-        return tokenizer(examples["text"])
+        return tokenizer(examples["text"], padding=False, truncation=False)
 
     tokenized_datasets = raw_datasets.map(
         tokenize_function,
@@ -75,7 +90,7 @@ def main():
     )
 
     # block_size = tokenizer.model_max_length
-    block_size = 4096  # 모델의 최대 시퀀스 길이로 설정
+    block_size = args.max_seq_length
 
     # 그룹화 함수 (시퀀스 패킹의 기초)
     def group_texts(examples):
@@ -117,26 +132,34 @@ def main():
         learning_rate=args.learning_rate,
         weight_decay=0.01,
         logging_dir=f"{args.output_dir}/logs",
-        logging_steps=10,
+        logging_steps=1,
         save_steps=500,
         save_total_limit=2,
-        bf16=True, # A100/H100의 경우 bf16=True 사용
-        torch_compile=True,
-        # report_to="tensorboard",
-        use_cpu=not torch.cuda.is_available(), # CUDA가 없을 경우 CPU 사용
-        # attn_implementation=attn_implementation,
+        bf16=True,
+        dataloader_num_workers=16,
+        dataloader_prefetch_factor=2,
+        dataloader_drop_last=True,  # 배치 크기를 일정하게 유지
+        remove_unused_columns=False,  # 필요한 컬럼 유지
     )
 
+    lm_datasets = lm_datasets['train'] if 'train' in lm_datasets else lm_datasets
+
     print(lm_datasets)
-    print(lm_datasets[0])
+    # print(lm_datasets[0])
     print("Collated batch example:")
-    print(data_collator(lm_datasets[0:2]))
+    sample_batch = [lm_datasets[i] for i in range(min(2, len(lm_datasets)))]
+    batch = data_collator(sample_batch)
+    for key, value in batch.items():
+        if isinstance(value, torch.Tensor):
+            print(f"{key}: {value.shape}")
+            print(value)
+        else:
+            print(f"{key}: {value}")
 
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=lm_datasets,
-        tokenizer=tokenizer,
         data_collator=data_collator,
     )
 
@@ -149,4 +172,5 @@ def main():
     trainer.save_model(args.output_dir)
 
 if __name__ == "__main__":
+    
     main()

@@ -1,3 +1,5 @@
+# run command: uv run accelerate launch moonlight-muon-train.py --model llama --optimizer muon --lr 1e-3 --wd 0.1 --dataset openwebtext-100k --output_dir ./outputs --max_seq_length 512
+
 import os
 import torch
 from loguru import logger
@@ -10,8 +12,9 @@ from transformers import (
     LlamaForCausalLM,
     AutoTokenizer,
     get_cosine_schedule_with_warmup,
-    # DataCollatorForLanguageModeling를 임포트합니다.
+    DataCollatorForLanguageModeling,
     DataCollatorWithFlattening,
+    
 )
 from tqdm import tqdm
 from muon_optimizer import Muon
@@ -54,7 +57,10 @@ def get_model_and_dataloader(model_name, dataset_name, max_seq_length):
     
     # Causal LM을 위한 데이터 콜레이터를 생성합니다. mlm=False가 핵심입니다.
     # 이 콜레이터가 여러 샘플을 max_seq_length 길이의 배치로 묶어줍니다.
-    data_collator = DataCollatorWithFlattening()
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False,
+    )
 
     # 수정된 데이터셋과 콜레이터로 DataLoader를 생성합니다.
     train_loader = DataLoader(
