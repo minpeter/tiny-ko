@@ -5,7 +5,6 @@ from itertools import chain
 
 import torch
 from datasets import load_dataset
-import pprint
 from transformers import (
     LlamaConfig,
     LlamaForCausalLM,
@@ -15,7 +14,6 @@ from transformers import (
     DataCollatorForLanguageModeling,
 )
 
-# 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -25,18 +23,16 @@ def main():
     parser.add_argument("--tokenizer_path", type=str, required=True, help="사전 훈련된 사용자 정의 토크나이저 경로.")
     parser.add_argument("--output_dir", type=str, default="./pretrain_output", help="모델 체크포인트와 결과를 저장할 디렉토리.")
     parser.add_argument("--model_config_name", type=str, default="small", help="사용할 모델 크기 설정 (small, medium, large).")
-    # 학습 관련 인자 추가
+
     parser.add_argument("--batch_size", type=int, default=8, help="디바이스당 훈련 배치 크기.")
     parser.add_argument("--num_train_epochs", type=int, default=1, help="총 훈련 에포크 수.")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="학습률.")
     parser.add_argument("--use_flash_attention_2", action="store_true", help="Flash Attention 2 사용 여부.")
     parser.add_argument("--packing", action="store_true", help="시퀀스 패킹 사용 여부.")
-    # model_max_length
     parser.add_argument("--max_seq_length", type=int, default=8192, help="모델의 최대 시퀀스 길이 (block size).")
 
     args = parser.parse_args()
 
-    # 1. 토크나이저 로드
     logger.info(f"토크나이저 로딩: {args.tokenizer_path}")
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path)
     if tokenizer.pad_token is None:
@@ -140,7 +136,7 @@ def main():
         dataloader_prefetch_factor=2,
         dataloader_drop_last=True,  # 배치 크기를 일정하게 유지
         remove_unused_columns=False,  # 필요한 컬럼 유지
-        torch_compile=True,
+        # torch_compile=True, # torch.compile is not compatible with FA2 (?)
     )
 
     lm_datasets = lm_datasets['train'] if 'train' in lm_datasets else lm_datasets
@@ -171,6 +167,7 @@ def main():
     # 8. 최종 모델 저장
     logger.info("훈련 완료. 최종 모델을 저장합니다.")
     trainer.save_model(args.output_dir)
+    tokenizer.save_pretrained(args.output_dir)
 
 if __name__ == "__main__":
     main()
