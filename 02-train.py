@@ -143,6 +143,7 @@ def main():
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         do_train=True,
+        do_eval=True,
         logging_dir=f"{args.output_dir}/logs",
         overwrite_output_dir=True,
         push_to_hub=True,
@@ -156,7 +157,7 @@ def main():
         logging_steps=25,
         
         num_train_epochs=args.num_train_epochs,
-        weight_decay=0.1,
+
         warmup_ratio=0.05,
         # --- Muon이 weight decay를 자체 처리하므로 Trainer에서는 0으로 설정 ---
         weight_decay=0.0,
