@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 from itertools import chain
+import math
 
 import torch
 from datasets import load_dataset
@@ -43,15 +44,24 @@ def main():
 
     # 2. 모델 구성 정의
     model_configs = {
-        "small": LlamaConfig(hidden_size=768, num_hidden_layers=29, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
-        "medium": LlamaConfig(hidden_size=1024, num_hidden_layers=24, num_attention_heads=16, intermediate_size=4096),
+        "small": LlamaConfig(initializer_range=(1/ math.sqrt(768)), hidden_size=768, num_hidden_layers=25, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
+        "smollm": LlamaConfig(hidden_size=576, num_hidden_layers=30, intermediate_size=1536, tie_word_embeddings=True, num_attention_heads=9, num_key_value_heads=3),
+        "medium": LlamaConfig(hidden_size=768, num_hidden_layers=29, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
         "large": LlamaConfig(hidden_size=2048, num_hidden_layers=24, num_attention_heads=16, intermediate_size=5504),
     }
     config = model_configs.get(args.model_config_name, model_configs["small"])
-    config.max_position_embeddings = args.max_seq_length
     config.torch_dtype = torch.bfloat16
     config.vocab_size = len(tokenizer)
     config.use_cache = False
+
+    config.max_position_embeddings = args.max_seq_length
+
+    # rope_theta 설정
+    if config.max_position_embeddings >= 8192:
+        config.rope_theta = 1_000_000.0  # 또는 500_000.0로 변경 가능
+    else:
+        config.rope_theta = 10_000.0  # 기본값
+
     config.pad_token_id = tokenizer.pad_token_id
     config.bos_token_id = tokenizer.eos_token_id # Qwen 스타일로, 모델 설정의 BOS만 이렇게 설정, 실제로는 사용 X
     config.eos_token_id = tokenizer.eos_token_id
@@ -62,6 +72,12 @@ def main():
     attn_implementation = "flash_attention_2" if args.use_flash_attention_2 else "eager"
     logger.info(f"'{args.model_config_name}' 설정으로 모델 초기화 중... (Attention: {attn_implementation})")
     model = LlamaForCausalLM(config)
+
+    model_size = sum(t.numel() for t in model.parameters())
+    print(f"Model size: {model_size/1000**3:.2f}B parameters")
+    print(f"Model size: {model_size/1000**2:.2f}M parameters")
+    print(f"Model size: {model_size/1000:.1f}K parameters")
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(torch.bfloat16)
     model.to(device)
@@ -123,7 +139,8 @@ def main():
         output_dir=args.output_dir,
         overwrite_output_dir=True,
         do_train=True,
-        per_device_train_batch_size=args.batch_size,
+        # per_device_train_batch_size=args.batch_size,
+        auto_find_batch_size=True,
         num_train_epochs=args.num_train_epochs,
         learning_rate=args.learning_rate,
         weight_decay=0.01,
