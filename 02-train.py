@@ -119,6 +119,8 @@ def main():
     print(f"테스트 샘플 수: {len(lm_datasets['test'])}")
     print(f"샘플 0의 토큰 수: {len(lm_datasets['train'][0]['input_ids'])}")
 
+    print(f"총 학습 토큰 수 (추정): {(len(lm_datasets['train']) * args.max_seq_length) / 1000**3:.2f}B tokens")
+
     # idk what is better,,
     data_collator = DataCollatorWithFlattening()
     # data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
@@ -165,7 +167,7 @@ def main():
         learning_rate=args.learning_rate,
         dataloader_pin_memory=True,
         bf16=True,
-        # torch_compile=True,
+        torch_compile=True,
 
         dataloader_num_workers=16,
         dataloader_prefetch_factor=2,
