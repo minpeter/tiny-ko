@@ -122,7 +122,7 @@ def main():
     print(f"총 학습 토큰 수 (추정): {(len(lm_datasets['train']) * args.max_seq_length) / 1000**3:.2f}B tokens")
 
     # idk what is better,,
-    data_collator = DataCollatorWithFlattening()
+    data_collator = DataCollatorWithFlattening(return_flash_attn_kwargs=True)
     # data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
     print(lm_datasets["train"])

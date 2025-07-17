@@ -11,5 +11,5 @@ uv sync --no-build-isolation-package flash-attn
 ```shell
 uv run 00-tknz.py
 uv run 01-preprocess.py
-uv run 02-train.py --hf_model_id your-hf/model-id
+uv run accelerate launch 02-train.py --hf_model_id your-hf/model-id
 ```
