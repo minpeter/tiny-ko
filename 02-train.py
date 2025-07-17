@@ -59,7 +59,7 @@ def main():
 
     # 2. 모델 구성 정의
     model_configs = {
-        "small": LlamaConfig(initializer_range=(1/ math.sqrt(768)), hidden_size=768, num_hidden_layers=25, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
+        "small": LlamaConfig(initializer_range=(1/ math.sqrt(768)), hidden_size=768, num_hidden_layers=27, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
         "smollm": LlamaConfig(hidden_size=576, num_hidden_layers=30, intermediate_size=1536, tie_word_embeddings=True, num_attention_heads=9, num_key_value_heads=3),
         # "medium": LlamaConfig(hidden_size=768, num_hidden_layers=29, intermediate_size=1920, tie_word_embeddings=True, num_attention_heads=12, num_key_value_heads=4),
         # "large": LlamaConfig(hidden_size=2048, num_hidden_layers=24, num_attention_heads=16, intermediate_size=5504),
@@ -155,8 +155,11 @@ def main():
         save_strategy="steps",
         eval_steps=1_000,
         save_steps=1_000,
-        auto_find_batch_size=True,
         logging_steps=25,
+
+        # auto_find_batch_size=True,
+        per_device_train_batch_size=16,
+        
         
         num_train_epochs=args.num_train_epochs,
 
