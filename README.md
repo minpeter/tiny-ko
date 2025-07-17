@@ -3,7 +3,9 @@
 ## installation
 
 ```shell
-uv sync --no-build-isolation-package flash-attn
+# https://github.com/astral-sh/uv/issues/6437#issuecomment-2535324784
+uv sync --no-install-package flash-attn
+uv sync --no-build-isolation
 ```
 
 ## Usage
