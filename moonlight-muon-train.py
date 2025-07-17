@@ -1,293 +1,108 @@
-# # train qwen-like dense model with muon
-# uv run moonlight-muon-train.py --model qwen --optimizer muon --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
-
-# # train qwen-like dense model with adamw
-# uv run moonlight-muon-train.py --model qwen --optimizer adamw --dataset openwebtext-100k --hidden_size 896 --lr 1e-3
+# run command: uv run accelerate launch moonlight-muon-train.py --model llama --optimizer muon --lr 1e-3 --wd 0.1 --dataset openwebtext-100k --output_dir ./outputs --max_seq_length 512
 
 import os
-import math
 import torch
 from loguru import logger
 from datasets import load_dataset
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from transformers import (
     Qwen2Config,
     Qwen2ForCausalLM,
-    Qwen2Tokenizer,
+    LlamaConfig,
+    LlamaForCausalLM,
+    AutoTokenizer,
     get_cosine_schedule_with_warmup,
+    DataCollatorForLanguageModeling,
+    DataCollatorWithFlattening,
+    
 )
 from tqdm import tqdm
+from muon_optimizer import Muon
 
+# MoonDataset 클래스는 더 이상 필요 없으므로 삭제합니다.
 
-class MoonDataset(Dataset):
-    def __init__(self, dataset_name, dataset, tokenizer, max_length=512):
-        self.dataset_name = dataset_name
-        self.dataset = dataset
-        self.tokenizer = tokenizer
-        self.texts = dataset["train"]["text"]
-        self.max_length = max_length
-        self.tokens = []
-        self._tokenize_texts()
-
-    def _tokenize_texts(self):
-        if os.path.exists(f"{self.dataset_name}.bin"):
-            self.tokens = torch.load(f"{self.dataset_name}.bin")
-        else:
-            for text in tqdm(self.texts, desc="Tokenizing texts"):
-                encoded = self.tokenizer.encode(text, add_special_tokens=True)
-                self.tokens.extend(encoded)
-            torch.save(self.tokens, f"{self.dataset_name}.bin")
-
-    def __len__(self):
-        return len(self.tokens) // self.max_length
-
-    def __getitem__(self, idx):
-        start_idx = idx * (self.max_length)
-        end_idx = start_idx + (self.max_length)
-        token_slice = self.tokens[start_idx:end_idx]
-        data = torch.tensor(token_slice, dtype=torch.long)
-        return data
-
-
-# This code snippet is a modified version adapted from the following GitHub repository:
-# https://github.com/KellerJordan/Muon/blob/master/muon.py
-@torch.compile
-def zeropower_via_newtonschulz5(G, steps):
-    """
-    Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
-    quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
-    of minimizing steps, it turns out to be empirically effective to keep increasing the slope at
-    zero even beyond the point where the iteration no longer converges all the way to one everywhere
-    on the interval. This iteration therefore does not produce UV^T but rather something like US'V^T
-    where S' is diagonal with S_{ii}' ~ Uniform(0.5, 1.5), which turns out not to hurt model
-    performance at all relative to UV^T, where USV^T = G is the SVD.
-    """
-    assert len(G.shape) == 2
-    a, b, c = (3.4445, -4.7750, 2.0315)
-    X = G.bfloat16()
-    if G.size(0) > G.size(1):
-        X = X.T
-    # Ensure spectral norm is at most 1
-    X = X / (X.norm() + 1e-7)
-    # Perform the NS iterations
-    for _ in range(steps):
-        A = X @ X.T
-        B = (
-            b * A + c * A @ A
-        )  # adapted from suggestion by @jxbz, @leloykun, and @YouJiacheng
-        X = a * X + B @ X
-
-    if G.size(0) > G.size(1):
-        X = X.T
-    return X
-
-
-class Muon(torch.optim.Optimizer):
-    """
-    Muon - MomentUm Orthogonalized by Newton-schulz
-
-    Muon internally runs standard SGD-momentum, and then performs an orthogonalization post-
-    processing step, in which each 2D parameter's update is replaced with the nearest orthogonal
-    matrix. To efficiently orthogonalize each update, we use a Newton-Schulz iteration, which has
-    the advantage that it can be stably run in bfloat16 on the GPU.
-
-    Some warnings:
-    - We believe this optimizer is unlikely to work well for training with small batch size.
-    - We believe it may not work well for finetuning pretrained models, but we haven't tested this.
-
-    Arguments:
-        muon_params: The parameters to be optimized by Muon.
-        lr: The learning rate. The updates will have spectral norm of `lr`. (0.02 is a good default)
-        momentum: The momentum used by the internal SGD. (0.95 is a good default)
-        nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
-        ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
-        adamw_params: The parameters to be optimized by AdamW. Any parameters in `muon_params` which are
-        {0, 1}-D or are detected as being the embed or lm_head will be optimized by AdamW as well.
-        adamw_lr: The learning rate for the internal AdamW.
-        adamw_betas: The betas for the internal AdamW.
-        adamw_eps: The epsilon for the internal AdamW.
-        adamw_wd: The weight decay for the internal AdamW.
-    """
-
-    def __init__(
-        self,
-        lr=1e-3,
-        wd=0.1,
-        muon_params=None,
-        momentum=0.95,
-        nesterov=True,
-        ns_steps=5,
-        adamw_params=None,
-        adamw_betas=(0.9, 0.95),
-        adamw_eps=1e-8,
-    ):
-
-        defaults = dict(
-            lr=lr,
-            wd=wd,
-            momentum=momentum,
-            nesterov=nesterov,
-            ns_steps=ns_steps,
-            adamw_betas=adamw_betas,
-            adamw_eps=adamw_eps,
-        )
-
-        params = list(muon_params)
-        adamw_params = list(adamw_params) if adamw_params is not None else []
-        params.extend(adamw_params)
-        super().__init__(params, defaults)
-        # Sort parameters into those for which we will use Muon, and those for which we will not
-        for p in muon_params:
-            # Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
-            assert p.ndim == 2, p.ndim
-            self.state[p]["use_muon"] = True
-        for p in adamw_params:
-            # Do not use Muon for parameters in adamw_params
-            self.state[p]["use_muon"] = False
-
-    def adjust_lr_for_muon(self, lr, param_shape):
-        A, B = param_shape[:2]
-        # We adjust the learning rate and weight decay based on the size of the parameter matrix
-        # as describted in the paper
-        adjusted_ratio = 0.2 * math.sqrt(max(A, B))
-        adjusted_lr = lr * adjusted_ratio
-        return adjusted_lr
-
-    def step(self, closure=None):
-        """Perform a single optimization step.
-
-        Args:
-            closure (Callable, optional): A closure that reevaluates the model
-                and returns the loss.
-        """
-        loss = None
-        if closure is not None:
-            with torch.enable_grad():
-                loss = closure()
-
-        for group in self.param_groups:
-
-            ############################
-            #           Muon           #
-            ############################
-
-            params = [p for p in group["params"] if self.state[p]["use_muon"]]
-            # import pdb; pdb.set_trace()
-            lr = group["lr"]
-            wd = group["wd"]
-            momentum = group["momentum"]
-
-            # generate weight updates in distributed fashion
-            for p in params:
-                # sanity check
-                g = p.grad
-                if g is None:
-                    continue
-                if g.ndim > 2:
-                    g = g.view(g.size(0), -1)
-                assert g is not None
-
-                # calc update
-                state = self.state[p]
-                if "momentum_buffer" not in state:
-                    state["momentum_buffer"] = torch.zeros_like(g)
-                buf = state["momentum_buffer"]
-                buf.mul_(momentum).add_(g)
-                if group["nesterov"]:
-                    g = g.add(buf, alpha=momentum)
-                else:
-                    g = buf
-                u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
-
-                # scale update
-                adjusted_lr = self.adjust_lr_for_muon(lr, p.shape)
-
-                # apply weight decay
-                p.data.mul_(1 - lr * wd)
-
-                # apply update
-                p.data.add_(u, alpha=-adjusted_lr)
-
-            ############################
-            #       AdamW backup       #
-            ############################
-
-            params = [p for p in group["params"] if not self.state[p]["use_muon"]]
-            lr = group['lr']
-            beta1, beta2 = group["adamw_betas"]
-            eps = group["adamw_eps"]
-            weight_decay = group["wd"]
-
-            for p in params:
-                g = p.grad
-                if g is None:
-                    continue
-                state = self.state[p]
-                if "step" not in state:
-                    state["step"] = 0
-                    state["moment1"] = torch.zeros_like(g)
-                    state["moment2"] = torch.zeros_like(g)
-                state["step"] += 1
-                step = state["step"]
-                buf1 = state["moment1"]
-                buf2 = state["moment2"]
-                buf1.lerp_(g, 1 - beta1)
-                buf2.lerp_(g.square(), 1 - beta2)
-
-                g = buf1 / (eps + buf2.sqrt())
-
-                bias_correction1 = 1 - beta1**step
-                bias_correction2 = 1 - beta2**step
-                scale = bias_correction1 / bias_correction2**0.5
-                p.data.mul_(1 - lr * weight_decay)
-                p.data.add_(g, alpha=-lr / scale)
-
-        return loss
-
-
-def get_model_and_dataloader(model_name, dataset_name, hidden_size):
+# get_model_and_dataloader 함수를 DataCollator 방식으로 수정합니다.
+def get_model_and_dataloader(model_name, dataset_name, max_seq_length):
     name2path = {
         "openwebtext-100k": "Elriggs/openwebtext-100k",
     }
-    train_dataset = load_dataset(name2path[dataset_name], trust_remote_code=True)
-    if model_name == "qwen":
-        tokenizer = Qwen2Tokenizer.from_pretrained(
-            "Qwen/Qwen2.5-0.5B", trust_remote_code=True
-        )
-    else:
-        assert 0, f"model {model_name} not supported"
-    train_dataset = MoonDataset(dataset_name, train_dataset, tokenizer)
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+    
+    tokenizer = AutoTokenizer.from_pretrained(
+        "./artifacts/tknz"
+    )
 
+    # 데이터셋 로드
+    raw_dataset = load_dataset(name2path[dataset_name], split="train")
+
+    # 토큰화 함수 정의
+    def preprocess_function(examples):
+        tokenized_inputs = tokenizer(examples['text'])
+
+        if tokenizer.eos_token_id is not None:
+            for i in range(len(tokenized_inputs["input_ids"])):
+                tokenized_inputs["input_ids"][i].append(tokenizer.eos_token_id)
+                tokenized_inputs["attention_mask"][i].append(1)
+                if "token_type_ids" in tokenized_inputs:
+                    tokenized_inputs["token_type_ids"][i].append(0)
+
+        return tokenized_inputs
+
+    # .map()을 사용하여 데이터셋 전체를 효율적으로 토큰화합니다.
+    tokenized_dataset = raw_dataset.map(
+        preprocess_function,
+        batched=True,
+        num_proc=os.cpu_count(), # 사용 가능한 모든 CPU 코어를 활용해 병렬 처리
+        remove_columns=raw_dataset.column_names, # 기존 text 컬럼은 제거
+    )
+    
+    # Causal LM을 위한 데이터 콜레이터를 생성합니다. mlm=False가 핵심입니다.
+    # 이 콜레이터가 여러 샘플을 max_seq_length 길이의 배치로 묶어줍니다.
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False,
+    )
+
+    # 수정된 데이터셋과 콜레이터로 DataLoader를 생성합니다.
+    train_loader = DataLoader(
+        tokenized_dataset, batch_size=8, shuffle=True, collate_fn=data_collator
+    )
+
+    # --- 모델 설정 부분은 기존과 동일 ---
     if model_name == "qwen":
         config = Qwen2Config(
-            attention_dropout=0.0,
-            bos_token_id=151643,
-            eos_token_id=151643,
-            hidden_act="silu",
-            hidden_size=hidden_size,
-            initializer_range=0.02,
+            attn_implementation="flash_attention_2",
+            hidden_size=1024,
             intermediate_size=4864,
-            max_position_embeddings=513,
-            max_window_layers=12,
-            model_type="qwen2",
+            max_position_embeddings=max_seq_length,
             num_attention_heads=16,
             num_hidden_layers=12,
             num_key_value_heads=16,
-            rms_norm_eps=1e-06,
-            rope_theta=1000000.0,
-            sliding_window=1024,
             tie_word_embeddings=True,
-            torch_dtype="bfloat16",
-            use_cache=True,
-            use_mrope=False,
-            use_sliding_window=False,
-            vocab_size=151936,
+            torch_dtype=torch.bfloat16,
+            vocab_size=len(tokenizer),
+            # ... 기타 Qwen 설정 ...
         )
         model = Qwen2ForCausalLM(config)
+    elif model_name == "llama":
+        config = LlamaConfig(
+            hidden_size=480,
+            num_hidden_layers=32,
+            intermediate_size=1920,
+            tie_word_embeddings=True,
+            num_attention_heads=6,
+            num_key_value_heads=2,
+            vocab_size=len(tokenizer),
+            max_position_embeddings=max_seq_length,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            torch_dtype=torch.bfloat16,
+            attn_implementation="flash_attention_2",
+        )
+        model = LlamaForCausalLM(config)
     else:
         assert 0, f"model {model_name} not supported"
-    return model, train_loader
+
+    return model, train_loader, tokenizer
 
 
 def get_optimizer(optimizer_name, model, lr=1e-3, wd=0.1):
@@ -328,19 +143,32 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--wd", type=float, default=0.1)
     parser.add_argument("--dataset", type=str, default="openwebtext-100k")
-    parser.add_argument("--hidden_size", type=int, default=1024)
+    parser.add_argument("--output_dir", type=str, default="./outputs", help="Directory to save the trained model")
+    parser.add_argument("--max_seq_length", type=int, default=512, help="The maximum sequence length for tokenization and model.")
     args = parser.parse_args()
-    logger.add(f"logs/train_{args.model}_{args.optimizer}_lr{args.lr}.log")
+    
+    log_file_name = f"train_{args.model}_{args.optimizer}_lr{args.lr}.log"
+    logger.add(os.path.join("logs", log_file_name))
 
-    model, train_loader = get_model_and_dataloader(
-        args.model, args.dataset, args.hidden_size
+    output_path = os.path.join(args.output_dir, f"{args.model}_{args.optimizer}_lr{args.lr}")
+    os.makedirs(output_path, exist_ok=True)
+    logger.info(f"Model will be saved to: {output_path}")
+
+    # get_model_and_dataloader 호출 시 max_seq_length를 전달합니다.
+    # DataCollator가 내부적으로 이 값을 사용하지는 않지만, 모델 설정에 필요합니다.
+    model, train_loader, tokenizer = get_model_and_dataloader(
+        args.model, args.dataset, args.max_seq_length
     )
     optimizer = get_optimizer(
-        args.optimizer, model, lr=args.lr
+        args.optimizer, model, lr=args.lr, wd=args.wd
     )
 
+    torch.set_float32_matmul_precision('high')
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(torch.bfloat16)
     model.to(device)
+    # model = torch.compile(model)
 
     model.train()
     epoch = 1
@@ -351,15 +179,22 @@ if __name__ == "__main__":
         num_cycles=0.5,
     )
     for epoch in range(epoch):
-        for step, batch in enumerate(train_loader):
-            batch = batch.to(device)
-            input_ids = batch
-            outputs = model(input_ids=input_ids, labels=input_ids)
+        for step, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
+            # DataCollator가 생성한 배치는 'input_ids', 'attention_mask', 'labels' 키를 가집니다.
+            # 'labels'는 자동으로 생성되므로 모델에 그대로 전달하면 됩니다.
+            batch = {k: v.to(device) for k, v in batch.items()}
+            outputs = model(**batch)
+            
             loss = outputs.loss
             loss.backward()
             optimizer.step()
             lr_scheduler.step()
             optimizer.zero_grad()
-            logger.info(
-                f"Epoch: {epoch} Step: {step} LR: {optimizer.param_groups[0]['lr']} Training loss: {loss.item()}"
-            )
+            if step % 50 == 0:
+                logger.info(
+                    f"Epoch: {epoch} Step: {step} LR: {optimizer.param_groups[0]['lr']:.6f} Training loss: {loss.item():.4f}"
+                )
+    logger.info("Training finished. Saving model and tokenizer...")
+    model.save_pretrained(output_path)
+    tokenizer.save_pretrained(output_path)
+    logger.info(f"Model and tokenizer saved successfully to {output_path}")

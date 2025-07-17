@@ -22,3 +22,5 @@ tknz
 lm-eval-result
 processed_data
 logs
+*.bin
+artifacts
