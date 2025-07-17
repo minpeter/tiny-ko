@@ -10,6 +10,7 @@ dependencies = [
     "datasets>=3.6.0",
     "evaluate>=0.4.3",
     "flash-attn>=2.8.1",
+    "gpustat>=1.1.1",
     "hanja>=0.15.1",
     "hf-transfer>=0.1.9",
     "html5lib>=1.1",
