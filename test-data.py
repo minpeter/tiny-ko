@@ -103,7 +103,7 @@ def group_texts(examples):
 
 
 tokenizer = AutoTokenizer.from_pretrained(
-    "./artifacts/tknz/tiny-ko-tokenizer"
+    "./artifacts/tknz"
 )
 
 raw_datasets = Dataset.from_dict({

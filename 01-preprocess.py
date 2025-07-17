@@ -8,8 +8,8 @@ from trl import pack_dataset
 
 parser = argparse.ArgumentParser(description="Preprocess datasets for tiny-ko")
 parser.add_argument("--context_length", type=int, default=8192, help="Context length for grouping texts")
-parser.add_argument("--tokenizer_path", type=str, default="./artifacts/tknz/tiny-ko-tokenizer", help="Path to tokenizer")
-parser.add_argument("--save_path", type=str, default="./processed_data", help="Path to save processed data")
+parser.add_argument("--tokenizer_path", type=str, default="./artifacts/tknz", help="Path to tokenizer")
+parser.add_argument("--save_path", type=str, default="./artifacts/prepacked", help="Path to save processed data")
 
 args = parser.parse_args()
 

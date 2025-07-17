@@ -167,7 +167,7 @@ if __name__ == "__main__":
     # 사용자가 자신의 환경에 맞게 수정해야 할 부분입니다.
 
     # 평가할 토크나이저의 경로 (로컬 경로 또는 Hugging Face Hub 경로)
-    TOKENIZER_PATH = "./artifacts/tknz/tiny-ko-tokenizer"
+    TOKENIZER_PATH = "./artifacts/tknz"
     # 평가에 사용할 데이터셋의 Hugging Face Hub 경로
     DATASET_NAME = "minpeter/tiny-ko-corpus"
     # 사용할 데이터셋의 종류 (예: 'train', 'validation', 'test')

@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="Llama 모델을 처음부터 사전학습합니다.")
-    parser.add_argument("--dataset_path", type=str, default="./processed_data", help="훈련 데이터셋 경로 (텍스트 파일들이 있는 디렉토리).")
-    parser.add_argument("--tokenizer_path", type=str, default="./artifacts/tknz/tiny-ko-tokenizer", help="사전 훈련된 사용자 정의 토크나이저 경로.")
-    parser.add_argument("--output_dir", type=str, default="./outputs/pretrain", help="모델 체크포인트와 결과를 저장할 디렉토리.")
+    parser.add_argument("--dataset_path", type=str, default="./artifacts/prepacked", help="훈련 데이터셋 경로 (텍스트 파일들이 있는 디렉토리).")
+    parser.add_argument("--tokenizer_path", type=str, default="./artifacts/tknz", help="사전 훈련된 사용자 정의 토크나이저 경로.")
+    parser.add_argument("--output_dir", type=str, default="./artifacts/models/pretrain", help="모델 체크포인트와 결과를 저장할 디렉토리.")
     parser.add_argument("--model_config_name", type=str, default="small", help="사용할 모델 크기 설정 (small, medium, large).")
 
     parser.add_argument("--num_train_epochs", type=int, default=1, help="총 훈련 에포크 수.")

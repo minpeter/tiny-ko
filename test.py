@@ -11,7 +11,7 @@ from transformers import (
 from datasets import load_dataset
 
 # --- 1. 설정 및 상수 ---
-MODEL_NAME = "./artifacts/tknz/tiny-ko-tokenizer"
+MODEL_NAME = "./artifacts/tknz"
 DATASET_NAME = "Elriggs/openwebtext-100k"
 MAX_SEQ_LENGTH = 4096
 OUTPUT_DIR = "./outputs/test_improved"

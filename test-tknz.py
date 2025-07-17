@@ -2,7 +2,7 @@ from transformers import AutoTokenizer
 
 # 토크나이저 불러오기
 tokenizer = AutoTokenizer.from_pretrained(
-    "./artifacts/tknz/tiny-ko-tokenizer",
+    "./artifacts/tknz",
     # "LiquidAI/LFM2-350M",
     # "lgai-exaone/exaone-4.0-32b"
     # "qwen/qwen3-0.6b",

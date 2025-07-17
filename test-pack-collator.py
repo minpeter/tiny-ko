@@ -6,7 +6,7 @@ import pprint
 
 # 1. 토크나이저 및 데이터 준비
 # 사용자의 토크나이저 경로를 사용합니다.
-tokenizer = AutoTokenizer.from_pretrained("./artifacts/tknz/tiny-ko-tokenizer")
+tokenizer = AutoTokenizer.from_pretrained("./artifacts/tknz")
 # pad_token이 없을 경우 eos_token으로 설정 (CLM에서 일반적인 처리)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
