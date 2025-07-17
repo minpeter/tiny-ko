@@ -167,13 +167,21 @@ def main():
         learning_rate=args.learning_rate,
         dataloader_pin_memory=True,
         bf16=True,
-        torch_compile=True,
 
+
+        # wtf, idk why this is not working,,
+        # torch_compile=True,
+        # torch_compile_mode="reduce-overhead",  # "default", "max-autotune", "reduce-overhead"
+        
+        ddp_find_unused_parameters=True,
+        
         dataloader_num_workers=16,
         dataloader_prefetch_factor=2,
 
         dataloader_drop_last=True,
         remove_unused_columns=False,
+
+        use_liger_kernel=True,
 
         save_total_limit=3,
         load_best_model_at_end=True,
