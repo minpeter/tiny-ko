@@ -28,7 +28,7 @@ def get_model_and_dataloader(model_name, dataset_name, max_seq_length):
     }
     
     tokenizer = AutoTokenizer.from_pretrained(
-        "./tknz/tiny-ko-tokenizer"
+        "./artifacts/tknz/tiny-ko-tokenizer"
     )
 
     # 데이터셋 로드

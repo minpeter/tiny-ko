@@ -1,14 +1,14 @@
 import argparse
 import os
 import time
-from itertools import chain
 from datasets import load_dataset, concatenate_datasets
 from transformers import AutoTokenizer
+from trl import pack_dataset
 
 
 parser = argparse.ArgumentParser(description="Preprocess datasets for tiny-ko")
 parser.add_argument("--context_length", type=int, default=8192, help="Context length for grouping texts")
-parser.add_argument("--tokenizer_path", type=str, default="./tknz/tiny-ko-tokenizer", help="Path to tokenizer")
+parser.add_argument("--tokenizer_path", type=str, default="./artifacts/tknz/tiny-ko-tokenizer", help="Path to tokenizer")
 parser.add_argument("--save_path", type=str, default="./processed_data", help="Path to save processed data")
 
 args = parser.parse_args()
@@ -41,21 +41,6 @@ def tokenize_function(examples):
 
     return tokenized_inputs
 
-def group_texts(examples):
-    block_size=args.context_length
-
-    concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
-    total_length = len(concatenated_examples["input_ids"])
-    if total_length >= block_size:
-        total_length = (total_length // block_size) * block_size
-    
-    result = {
-        k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-        for k, t in concatenated_examples.items()
-    }
-    result["labels"] = result["input_ids"].copy()
-    return result
-
 if __name__ == "__main__":
     total_start_time = time.time()
     setup_directories()
@@ -69,13 +54,8 @@ if __name__ == "__main__":
         num_proc=os.cpu_count(),
         remove_columns=["text"],
     )
-    
-    lm_datasets = tokenized_datasets.map(
-        group_texts,
-        batched=True,
-        num_proc=os.cpu_count(),
-    )
 
-    lm_datasets.save_to_disk(args.save_path)
+    packed_dataset = pack_dataset(tokenized_datasets, seq_length=args.context_length, strategy="wrapped")
+    packed_dataset.save_to_disk(args.save_path)
 
     print(f"\nTotal elapsed time: {(time.time() - total_start_time)/60:.2f} minutes")

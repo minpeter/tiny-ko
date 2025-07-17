@@ -11,6 +11,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     DataCollatorForLanguageModeling,
+    DataCollatorWithFlattening,
     HfArgumentParser,
     Trainer,
     TrainingArguments,
@@ -107,7 +108,8 @@ def main():
 
 
     # --- 데이터 콜레이터 설정 ---
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    # data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    data_collator = DataCollatorWithFlattening()
 
     # --- 모델 로드 ---
     logger.info(f"Loading model: {model_args.model_name_or_path}")
@@ -115,6 +117,7 @@ def main():
         model_args.model_name_or_path,
         trust_remote_code=model_args.trust_remote_code,
         torch_dtype=torch.bfloat16,
+        attn_implementation="flash_attention_2", # 수정된 부분
     )
     
     # --- 트레이너 설정 및 학습 시작 ---

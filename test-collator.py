@@ -2,7 +2,7 @@ from transformers import DataCollatorForLanguageModeling, AutoTokenizer
 import pprint
 
 tokenizer = AutoTokenizer.from_pretrained(
-    "./tknz/tiny-ko-tokenizer"
+    "./artifacts/tknz/tiny-ko-tokenizer"
 )
 
 collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)

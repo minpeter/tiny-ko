@@ -1,19 +1,19 @@
 import torch
-from transformers import DataCollatorForLanguageModeling, AutoTokenizer
+from transformers import DataCollatorForLanguageModeling, AutoTokenizer, DataCollatorWithFlattening
 from datasets import Dataset
 from trl import pack_dataset
 import pprint
 
 # 1. 토크나이저 및 데이터 준비
 # 사용자의 토크나이저 경로를 사용합니다.
-tokenizer = AutoTokenizer.from_pretrained("./tknz/tiny-ko-tokenizer")
+tokenizer = AutoTokenizer.from_pretrained("./artifacts/tknz/tiny-ko-tokenizer")
 # pad_token이 없을 경우 eos_token으로 설정 (CLM에서 일반적인 처리)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
 # 실제 한국어 텍스트 데이터
 text_examples = [
-    "안녕하세요, 만나서 반갑습니다, 저는",
+    "안녕하세요, 만나서 반갑습니다, 저는 .",
     "이것은 TRL의 pack_dataset 함수 테스트 예제입니다.",
     "짧은 문장.",
     "그리고 조금 더 긴 문장입니다."
@@ -23,8 +23,27 @@ text_examples = [
 print("--- [단계 1] 원본 텍스트 데이터 ---")
 pprint.pprint(text_examples)
 
+
+def tokenize_function(examples):
+    tokenized_inputs = tokenizer(examples["text"], padding=False, truncation=False)
+
+    if tokenizer.eos_token_id is not None:
+        for i in range(len(tokenized_inputs["input_ids"])):
+            tokenized_inputs["input_ids"][i].append(tokenizer.eos_token_id)
+            tokenized_inputs["attention_mask"][i].append(1)
+            if "token_type_ids" in tokenized_inputs:
+                tokenized_inputs["token_type_ids"][i].append(0)
+
+    return tokenized_inputs
+
 # 2. 데이터 토큰화 및 Dataset 생성
-tokenized_dataset = Dataset.from_dict(tokenizer(text_examples))
+raw_datasets = Dataset.from_dict({"text": text_examples})
+tokenized_dataset = raw_datasets.map(
+    tokenize_function,
+    batched=True,
+    num_proc=1,  # CPU 코어 수에 따라 조정
+    remove_columns=["text"],
+)
 
 # 원본 샘플별 길이 출력
 print("\n--- [단계 1] 토큰화된 데이터셋 결과 ---")
@@ -45,13 +64,21 @@ print("\n--- [단계 2] 패킹된 데이터셋 결과 ---")
 # pack_dataset은 Dataset을 반환하며, 각 샘플의 길이는 seq_length와 같거나 더 짧습니다.
 pprint.pprint(packed_dataset[:])
 
+
+# 로컬에 packed_dataset를 저장했다가 다시 로드 (./outputs/packed_ds_test)
+packed_dataset.save_to_disk("./outputs/packed_ds_test")
+
+reloaded_dataset = Dataset.load_from_disk("./outputs/packed_ds_test")
+
+
 # 4. 데이터 콜레이터 준비 및 적용
 # mlm=False는 Causal Language Modeling (다음 단어 예측)을 의미합니다.
 collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+# collator = DataCollatorWithFlattening()
 
 # 패킹된 데이터셋 전체를 하나의 배치로 만듭니다.
 # 실제 훈련 시에는 DataLoader가 이 역할을 수행합니다.
-batch = [sample for sample in packed_dataset]
+batch = [sample for sample in reloaded_dataset]
 
 # 콜레이터를 배치에 적용합니다.
 collated_batch = collator(batch)
