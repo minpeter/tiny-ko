@@ -1,6 +1,6 @@
 # RUN COMMAND:
 # export CUDA_VISIBLE_DEVICES=0,1,2,3
-# time uv run accelerate launch 02-train.py --hf_model_id minpeter/pretrain
+# time uv run accelerate launch 02-train.py --hf_model_id minpeter/pretrain --max_seq_length 8192 --dataset_path ./artifacts/prepacked-8k
 
 
 import argparse
@@ -118,6 +118,8 @@ def main():
     print(f"훈련 샘플 수: {len(lm_datasets['train'])}")
     print(f"테스트 샘플 수: {len(lm_datasets['test'])}")
     print(f"샘플 0의 토큰 수: {len(lm_datasets['train'][0]['input_ids'])}")
+
+    assert len(lm_datasets['train'][0]['input_ids']) == args.max_seq_length
 
     print(f"총 학습 토큰 수 (추정): {(len(lm_datasets['train']) * args.max_seq_length) / 1000**3:.2f}B tokens")
 
