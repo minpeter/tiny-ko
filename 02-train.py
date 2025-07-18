@@ -39,7 +39,6 @@ def main():
     parser.add_argument("--optimizer", type=str, default="muon", choices=["adamw", "muon"], help="사용할 옵티마이저 종류.")
     # upload hf model id
     parser.add_argument("--hf_model_id", type=str, default="minpeter/pretrain", help="Hugging Face 모델 ID.", required=True)
-
     args = parser.parse_args()
 
     logger.info(f"토크나이저 로딩: {args.tokenizer_path}")
@@ -161,6 +160,7 @@ def main():
 
         # auto_find_batch_size=True,
         per_device_train_batch_size=16,
+        # gradient_accumulation_steps=2,
         
         
         num_train_epochs=args.num_train_epochs,
@@ -170,7 +170,6 @@ def main():
         weight_decay=0.0,
         lr_scheduler_type="cosine",  # warmup_stable_decay
         learning_rate=args.learning_rate,
-        dataloader_pin_memory=True,
         bf16=True,
 
 
@@ -182,8 +181,9 @@ def main():
         
         dataloader_num_workers=16,
         dataloader_prefetch_factor=2,
-
+        dataloader_pin_memory=True,
         dataloader_drop_last=True,
+
         remove_unused_columns=False,
 
         use_liger_kernel=True,
@@ -203,7 +203,9 @@ def main():
         optimizers=(optimizer, None),
     )
 
-    trainer.train()
+    trainer.train(
+        resume_from_checkpoint=True
+    )
 
 if __name__ == "__main__":
     main()
