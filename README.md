@@ -25,6 +25,10 @@ https://huggingface.co/minpeter/tiny-ko-20m-base-en
 .... 
 
 
+## Model Evaluation (lm-eval)
+https://wandb.ai/kasfiekfs-e/lm-eval-harness-integration/workspace  
+
+
 ## Other similar projects
 https://github.com/huggingface/smollm/tree/main/text/pretraining  
 https://github.com/SmallDoges/small-doge  
