@@ -31,6 +31,7 @@ https://wandb.ai/kasfiekfs-e/lm-eval-harness-integration/workspace
 
 ## Other similar projects
 https://github.com/huggingface/smollm/tree/main/text/pretraining  
+https://github.com/jzhang38/TinyLlama  
 https://github.com/SmallDoges/small-doge  
 https://github.com/keeeeenw/MicroLlama  
 https://github.com/karpathy/nanoGPT  
