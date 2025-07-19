@@ -15,3 +15,11 @@ uv run 00-tknz.py
 uv run 01-preprocess.py
 uv run accelerate launch 02-train.py --hf_model_id your-hf/model-id
 ```
+
+
+## cpkt
+
+https://huggingface.co/minpeter/tiny-ko-187m-base-250718  
+https://huggingface.co/minpeter/tiny-ko-124m-base-muon  
+https://huggingface.co/minpeter/tiny-ko-20m-base-en  
+.... 
