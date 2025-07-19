@@ -17,7 +17,7 @@ uv run accelerate launch 02-train.py --hf_model_id your-hf/model-id
 ```
 
 
-## cpkt
+## ckpt
 
 https://huggingface.co/minpeter/tiny-ko-187m-base-250718  
 https://huggingface.co/minpeter/tiny-ko-124m-base-muon  
