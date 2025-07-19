@@ -23,3 +23,12 @@ https://huggingface.co/minpeter/tiny-ko-187m-base-250718
 https://huggingface.co/minpeter/tiny-ko-124m-base-muon  
 https://huggingface.co/minpeter/tiny-ko-20m-base-en  
 .... 
+
+
+## Other similar projects
+https://github.com/huggingface/smollm/tree/main/text/pretraining  
+https://github.com/SmallDoges/small-doge  
+https://github.com/keeeeenw/MicroLlama  
+https://github.com/karpathy/nanoGPT  
+[[Model] Very, very small things Collections](https://huggingface.co/collections/minpeter/model-very-very-small-things-68660f5eaa427e3d37b8ca8a)
+ 
