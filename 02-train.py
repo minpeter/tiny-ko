@@ -149,9 +149,11 @@ def main():
         do_eval=True,
         logging_dir=f"{args.output_dir}/logs",
         overwrite_output_dir=True,
+
         push_to_hub=True,
         hub_model_id=args.hf_model_id,
-        hub_strategy="every_save",
+        hub_strategy="checkpoint",
+
         eval_strategy="steps",
         save_strategy="steps",
         eval_steps=1_000,
@@ -192,6 +194,8 @@ def main():
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
+
+
     )
 
     trainer = Trainer(
@@ -205,6 +209,7 @@ def main():
 
     trainer.train(
         resume_from_checkpoint=True
+        # resume_from_checkpoint="last-checkpoint" # resume from the huggingface_hub last checkpoint
     )
 
 if __name__ == "__main__":
