@@ -349,6 +349,25 @@ wheels = [
 ]
 
 [[package]]
+name = "datatrove"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dill" },
+    { name = "fsspec" },
+    { name = "huggingface-hub" },
+    { name = "humanize" },
+    { name = "loguru" },
+    { name = "multiprocess" },
+    { name = "numpy" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1f/49/f79a29f2d91422914195b7dfa06a334a1250f0f6956557c7e2cdcbf9821a/datatrove-0.5.0.tar.gz", hash = "sha256:b1fb13324e86126dace2de2dcaa7aeab53facfc1628f5f6e0ecf5789c78649ad", size = 17223459, upload-time = "2025-04-30T16:50:01.437Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/b0/1bdf21c6ff4007aa1ca9566eddd8721b01f398b53a989cdb65cf3026b8f1/datatrove-0.5.0-py3-none-any.whl", hash = "sha256:d65ccafcad4dcc00684b0351734777e01d9a9fef448f57947252591768fef3db", size = 17260206, upload-time = "2025-04-30T16:49:58.62Z" },
+]
+
+[[package]]
 name = "debugpy"
 version = "1.8.15"
 source = { registry = "https://pypi.org/simple" }
@@ -628,6 +647,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4b/9e/9366b7349fc125dd68b9d384a0fea84d67b7497753fe92c71b67e13f47c4/huggingface_hub-0.33.4.tar.gz", hash = "sha256:6af13478deae120e765bfd92adad0ae1aec1ad8c439b46f23058ad5956cbca0a", size = 426674, upload-time = "2025-07-11T12:32:48.694Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/46/7b/98daa50a2db034cab6cd23a3de04fa2358cb691593d28e9130203eb7a805/huggingface_hub-0.33.4-py3-none-any.whl", hash = "sha256:09f9f4e7ca62547c70f8b82767eefadd2667f4e116acba2e3e62a5a81815a7bb", size = 515339, upload-time = "2025-07-11T12:32:46.346Z" },
+]
+
+[[package]]
+name = "humanize"
+version = "4.12.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/d1/bbc4d251187a43f69844f7fd8941426549bbe4723e8ff0a7441796b0789f/humanize-4.12.3.tar.gz", hash = "sha256:8430be3a615106fdfceb0b2c1b41c4c98c6b0fc5cc59663a5539b111dd325fb0", size = 80514, upload-time = "2025-04-30T11:51:07.98Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/1e/62a2ec3104394a2975a2629eec89276ede9dbe717092f6966fcf963e1bf0/humanize-4.12.3-py3-none-any.whl", hash = "sha256:2cbf6370af06568fa6d2da77c86edb7886f3160ecd19ee1ffef07979efc597f6", size = 128487, upload-time = "2025-04-30T11:51:06.468Z" },
 ]
 
 [[package]]
@@ -1984,6 +2012,7 @@ dependencies = [
     { name = "accelerate" },
     { name = "bs4" },
     { name = "datasets" },
+    { name = "datatrove" },
     { name = "evaluate" },
     { name = "flash-attn" },
     { name = "gpustat" },
@@ -2011,6 +2040,7 @@ requires-dist = [
     { name = "accelerate", specifier = ">=1.7.0" },
     { name = "bs4", specifier = ">=0.0.2" },
     { name = "datasets", specifier = ">=3.6.0" },
+    { name = "datatrove", specifier = ">=0.5.0" },
     { name = "evaluate", specifier = ">=0.4.3" },
     { name = "flash-attn", specifier = ">=2.8.1" },
     { name = "gpustat", specifier = ">=1.1.1" },
