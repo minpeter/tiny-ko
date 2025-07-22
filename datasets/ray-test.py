@@ -1,25 +1,41 @@
-from datatrove.data import Document
-from datatrove.pipeline.filters import SamplerFilter
-from datatrove.pipeline.writers import JsonlWriter
-
-
+import os
 import ray
+import argparse
+
+from datatrove.pipeline.filters import SamplerFilter
+from datatrove.pipeline.readers import ParquetReader
+from datatrove.pipeline.writers import ParquetWriter
 from datatrove.executor import RayPipelineExecutor
-ray.init()
+
+parser = argparse.ArgumentParser(description="Ray Test Pipeline")
+parser.add_argument("--artifact_path", type=str,
+                    default="./artifacts/datatrove-test",
+                    help="Path to store artifacts")
+parser.add_argument("--ray_temp_dir", type=str,
+                    default="/data/temp/ray",
+                    help="Temporary directory for Ray, recommended to use a path on the same storage as artifact_path")
+args = parser.parse_args()
+
+if args.ray_temp_dir == "/data/temp/ray":
+    print("\033[93mWARNING:\033[0m Using default ray_temp_dir. It is recommended to set this to a path on the same storage as artifact_path for better performance.")
+
+# 로그와 아티팩트 경로를 절대 경로로 지정합니다.
+logging_dir = os.path.abspath(os.path.join(args.artifact_path, "logs"))
+output_dir = os.path.abspath(os.path.join(args.artifact_path, "data"))
+ray_temp_dir = os.path.abspath(args.ray_temp_dir)
+
+ray.init(_temp_dir=ray_temp_dir)
+
 executor = RayPipelineExecutor(
     pipeline=[
-        [
-            Document(text="some data", id="0"),
-            Document(text="some more data", id="1"),
-            Document(text="even more data", id="2"),
-        ],
+        ParquetReader("hf://datasets/HuggingFaceFW/fineweb-2/data/kor_Hang/train", limit=4096),
         SamplerFilter(rate=0.5),
-        JsonlWriter(
-            output_folder="./artifacts/datatrove-test"
+        ParquetWriter(
+            output_folder=output_dir
         )
     ],
-    logging_dir="logs/",
+    logging_dir=logging_dir,
     tasks=500,
-    workers=100,  # omit to run all at once
+    workers=100,
 )
 executor.run()
