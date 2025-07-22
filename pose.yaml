@@ -1,7 +1,7 @@
-base_model: minpeter/tiny-ko-124m-base-muon
+base_model: minpeter/tiny-ko-187m-base-250718
 
-hub_model_id: minpeter/tiny-ko-124m-sft-muon
-output_dir: ./outputs/tiny-ko-124m-sft-muon
+hub_model_id: minpeter/tiny-ko-187m-sft-250718
+output_dir: ./outputs/tiny-ko-187m-sft-250718
 wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
 
@@ -83,18 +83,18 @@ datasets:
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.001
 save_safetensors: true
-sequence_len: 2048
+sequence_len: 8192
 sample_packing: false
 pad_to_sequence_len: false
 use_pose: true
 pose_max_context_len: 65536
 
 overrides_of_model_config:
-  rope_theta: 10000.0
+  rope_theta: 1000000.0
   max_position_embeddings: 65536
 
 gradient_accumulation_steps: 8
-micro_batch_size: 32
+micro_batch_size: 8
 num_epochs: 1
 optimizer: muon
 lr_scheduler: cosine
@@ -126,3 +126,6 @@ deepspeed:
 weight_decay: 0.0
 fsdp:
 fsdp_config:
+
+special_tokens:
+  eos_token: '<|im_end|>'
