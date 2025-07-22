@@ -133,18 +133,18 @@ special_tokens:
 plugins:
   - axolotl.integrations.cut_cross_entropy.CutCrossEntropyPlugin
   - axolotl.integrations.liger.LigerPlugin
-  - axolotl.integrations.lm_eval.LMEvalPlugin
+#   - axolotl.integrations.lm_eval.LMEvalPlugin
 
-lm_eval_tasks:
-  - gsm8k
-  - hellaswag
-  - arc_easy
-  - arc_challenge
-  - piqa
-  - winogrande
-  - openbookqa
-  - wsc
-  - boolq
+# lm_eval_tasks:
+#   - gsm8k
+#   - hellaswag
+#   - arc_easy
+#   - arc_challenge
+#   - piqa
+#   - winogrande
+#   - openbookqa
+#   - wsc
+#   - boolq
 
 liger_rope: true
 liger_rms_norm: true
