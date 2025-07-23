@@ -19,7 +19,6 @@ args = parser.parse_args()
 if args.ray_temp_dir == "/data/temp/ray":
     print("\033[93mWARNING:\033[0m Using default ray_temp_dir. It is recommended to set this to a path on the same storage as artifact_path for better performance.")
 
-# 로그와 아티팩트 경로를 절대 경로로 지정합니다.
 logging_dir = os.path.abspath(os.path.join(args.artifact_path, "logs"))
 output_dir = os.path.abspath(os.path.join(args.artifact_path, "data"))
 ray_temp_dir = os.path.abspath(args.ray_temp_dir)
@@ -28,8 +27,11 @@ ray.init(_temp_dir=ray_temp_dir)
 
 executor = RayPipelineExecutor(
     pipeline=[
-        ParquetReader("hf://datasets/HuggingFaceFW/fineweb-2/data/kor_Hang/train", limit=4096),
-        SamplerFilter(rate=0.5),
+        ParquetReader(
+            "hf://datasets/HuggingFaceFW/fineweb-2/data/kor_Hang/train",
+            limit=20000,
+        ),
+        SamplerFilter(rate=0.1),
         ParquetWriter(
             output_folder=output_dir
         )
