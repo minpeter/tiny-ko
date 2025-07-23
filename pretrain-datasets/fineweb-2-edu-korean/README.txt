@@ -19,8 +19,10 @@ for Korean language model pretraining.
 
 LIMITATIONS / TODOS
 - The filtering process requires significant computing power.
+- The classifier model was trained and evaluated by a third party;
+    it was not trained or evaluated directly by this project.
 - The training quality has not been compared with the dataset before filtering.
-- The classifier model has not been trained/evaluated.
+
 
 ACKNOWLEDGEMENTS
 minpeter :b
