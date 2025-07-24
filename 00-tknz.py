@@ -1,3 +1,4 @@
+import argparse
 import os
 from datasets import load_dataset, Dataset
 from tokenizers import (
@@ -13,10 +14,23 @@ from tokenizers import (
 from transformers import PreTrainedTokenizerFast, AutoTokenizer
 
 
+parser = argparse.ArgumentParser(
+    description="Train and save a Hugging Face tokenizer.")
+parser.add_argument("--tokenizer_id", type=str,
+                    default="minpeter/tiny-ko-tokenizer",
+                    required=True,
+                    help="Huggingface tokenizer ID to save")
+parser.add_argument("--vocab_size", type=int, default=32000,
+                    help="Target vocabulary size for the tokenizer")
+
+args = parser.parse_args()
+
+
 def train_and_save_huggingface_tokenizer(
     dataset: Dataset,
     output_dir: str = "./artifacts/tknz",
-    target_vocab_size: int = 32000
+    target_vocab_size: int = 32000,
+    huggingface_hub_id: str = "minpeter/tiny-ko-tokenizer"
 ):
     # Define additional tokens needed, excluding EOS, BOS, PAD, UNK, and instruct tokens
     additional_tokens = [
@@ -29,10 +43,14 @@ def train_and_save_huggingface_tokenizer(
         AddedToken("<think>", special=False, normalized=False),
         AddedToken("</think>", special=False, normalized=False),
         # Reserved special tokens
-        AddedToken("<|unused_special_token_0|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_1|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_2|>", special=True, normalized=False),
-        AddedToken("<|unused_special_token_3|>", special=True, normalized=False),
+        AddedToken("<|unused_special_token_0|>",
+                   special=True, normalized=False),
+        AddedToken("<|unused_special_token_1|>",
+                   special=True, normalized=False),
+        AddedToken("<|unused_special_token_2|>",
+                   special=True, normalized=False),
+        AddedToken("<|unused_special_token_3|>",
+                   special=True, normalized=False),
     ]
 
     vocab_size = target_vocab_size - len(additional_tokens)
@@ -99,6 +117,9 @@ def train_and_save_huggingface_tokenizer(
 
     os.makedirs(output_dir, exist_ok=True)
     fast_tokenizer.save_pretrained(output_dir)
+    print(f"✅ Tokenizer saved to {output_dir}")
+    fast_tokenizer.push_to_hub(huggingface_hub_id, private=False)
+    print(f"✅ Tokenizer pushed to Hugging Face Hub: {huggingface_hub_id}")
 
     print(f"✅ Tokenizer and config files have been saved to '{output_dir}'")
     print("Generated files:", os.listdir(output_dir))
@@ -132,6 +153,7 @@ def train_and_save_huggingface_tokenizer(
             "This may lead to slight performance degradation during model quantization or training."
         )
 
+
 if __name__ == "__main__":
     dataset = load_dataset("minpeter/tiny-corpus", split="train")
     print("✅ Dataset loaded successfully")
@@ -139,6 +161,7 @@ if __name__ == "__main__":
 
     train_and_save_huggingface_tokenizer(
         dataset=dataset,
-        output_dir="./artifacts/tknz",
-        target_vocab_size=32000,
+        output_dir=f"./artifacts/tknz/{args.tokenizer_id}",
+        target_vocab_size=args.vocab_size,
+        huggingface_hub_id=args.tokenizer_id
     )
