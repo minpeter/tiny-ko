@@ -1,5 +1,5 @@
 import os
-from datasets import load_dataset, concatenate_datasets, Dataset
+from datasets import load_dataset, Dataset
 from tokenizers import (
     Tokenizer,
     AddedToken,
@@ -133,28 +133,7 @@ def train_and_save_huggingface_tokenizer(
         )
 
 if __name__ == "__main__":
-    ds_kr = load_dataset("minpeter/tiny-ko-corpus", split="train")
-    cosmopedia = load_dataset(
-        "HuggingFaceTB/smollm-corpus",
-        data_files=[f"cosmopedia-v2/train-{i:05d}-of-00104.parquet" for i in range(21)],
-        split="train",
-    )
-    fineweb = load_dataset(
-        "HuggingFaceTB/smollm-corpus",
-        data_files=[
-            f"fineweb-edu-dedup/train-{i:05d}-of-00234.parquet" for i in range(21)
-        ],
-        split="train",
-    )
-    cosmopedia_text = cosmopedia.remove_columns(
-        [col for col in cosmopedia.column_names if col != "text"]
-    )
-    fineweb_text = fineweb.remove_columns(
-        [col for col in fineweb.column_names if col != "text"]
-    )
-    ds_en = concatenate_datasets([cosmopedia_text, fineweb_text])
-    dataset = concatenate_datasets([ds_kr, ds_en])
-
+    dataset = load_dataset("minpeter/tiny-corpus", split="train")
     print("✅ Dataset loaded successfully")
     print(dataset)
 
