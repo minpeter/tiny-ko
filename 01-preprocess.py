@@ -1,3 +1,5 @@
+# uv run 01-preprocess.py --context_length 8192 --tokenizer_id minpeter/tiny-ko-tokenizer-32k-250725 --save_path ./artifacts/prepacked-8k-new
+
 import argparse
 import os
 import time
@@ -9,8 +11,8 @@ from trl import pack_dataset
 parser = argparse.ArgumentParser(description="Preprocess datasets for tiny-ko")
 parser.add_argument("--context_length", type=int, default=8192,
                     help="Context length for grouping texts")
-parser.add_argument("--tokenizer_path", type=str,
-                    default="./artifacts/tknz", help="Path to tokenizer")
+parser.add_argument("--tokenizer_id", type=str,
+                    default="minpeter/tiny-ko-tokenizer-32k-250725", help="Path to tokenizer")
 parser.add_argument("--save_path", type=str,
                     default="./artifacts/prepacked", help="Path to save processed data")
 
@@ -18,7 +20,6 @@ args = parser.parse_args()
 
 
 def setup_directories():
-    os.makedirs(os.path.dirname(args.tokenizer_path), exist_ok=True)
     os.makedirs(args.save_path, exist_ok=True)
 
 
@@ -47,12 +48,16 @@ if __name__ == "__main__":
     setup_directories()
 
     raw_datasets = load_raw_datasets()
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_id)
+
+    num_processors = max(1, os.cpu_count() - 8)
+    print(
+        f"Total CPUs: {os.cpu_count()}, Using {num_processors} processes for mapping.")
 
     tokenized_datasets = raw_datasets.map(
         tokenize_function,
         batched=True,
-        num_proc=os.cpu_count(),
+        num_proc=num_processors,
         remove_columns=["text"],
     )
 
