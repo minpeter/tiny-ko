@@ -50,7 +50,9 @@ if __name__ == "__main__":
     raw_datasets = load_raw_datasets()
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_id)
 
-    num_processors = max(1, os.cpu_count() - 8)
+    # num_processors = max(1, os.cpu_count() - 8)
+    # During working hours, do not occupy all cluster resources.
+    num_processors = 32
     print(
         f"Total CPUs: {os.cpu_count()}, Using {num_processors} processes for mapping.")
 
