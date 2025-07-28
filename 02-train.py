@@ -226,7 +226,7 @@ def main():
     )
 
     trainer.train(
-        # resume_from_checkpoint=True
+        resume_from_checkpoint=True
         # resume_from_checkpoint="last-checkpoint" # resume from the huggingface_hub last checkpoint
     )
 
