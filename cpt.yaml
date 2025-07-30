@@ -1,0 +1,54 @@
+
+base_model: minpeter/tiny-ko-187m-base-250725
+model_type: AutoModelForCausalLM
+tokenizer_type: AutoTokenizer
+
+hub_model_id: minpeter/tiny-ko-187m-base-250725-phase2
+output_dir: ./outputs/tiny-ko-187m-base-250725-phase2
+
+load_in_8bit: false
+load_in_4bit: false
+strict: false
+
+datasets:
+  - path: blueapple8259/c4-ko-cleaned-2
+    type: completion
+    split: train
+dataset_prepared_path: last_run_prepared
+val_set_size: 0.001
+save_safetensors: true
+
+sequence_len: 8192
+sample_packing: false
+pad_to_sequence_len: false
+
+wandb_project: "axolotl"
+wandb_entity: "kasfiekfs-e"
+
+gradient_accumulation_steps: 8
+micro_batch_size: 32
+num_epochs: 1
+optimizer: muon
+
+lr_scheduler: cosine
+warmup_steps_ratio: 0.1
+
+learning_rate: 2e-4
+
+train_on_inputs: false
+group_by_length: false
+bf16: auto
+fp16:
+tf32: true
+
+torch_compile: true
+gradient_checkpointing: true
+resume_from_checkpoint:
+local_rank:
+logging_steps: 1
+flash_attention: true
+
+eval_steps: 200
+save_steps: 200
+debug:
+weight_decay: 0.0
