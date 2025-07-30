@@ -24,3 +24,14 @@ docker run --privileged --gpus '"all"' --shm-size 10g --rm -it \
   -e "WANDB_API_KEY=$WANDB_API_KEY" \
   minpeter/axolotl-cuda128-base:latest
 ```
+
+## CUDA 12.9.1
+
+```
+docker build \
+  --build-arg CUDA_VERSION=12.9.1 \
+  --build-arg CUDA=129 \
+  --build-arg TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 9.0 10.0+PTX" \
+  -t axolotl-cuda129-base \
+  ./axolotl-cuda128-docker/
+```
