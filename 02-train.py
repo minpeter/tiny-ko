@@ -19,7 +19,7 @@ from transformers import (
     DataCollatorForLanguageModeling,
     DataCollatorWithFlattening,
 )
-from muon_optimizer import create_muon_optimizer
+from pytorch_optimizer import Muon
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -110,10 +110,11 @@ def main():
 
     if args.optimizer == "muon":
         logger.info("Muon 옵티마이저를 생성합니다.")
-        optimizer = create_muon_optimizer(
-            model,
+
+        optimizer = Muon(
+            model.parameters(),
             lr=args.learning_rate,
-            wd=args.weight_decay,
+            weight_decay=args.weight_decay,
         )
     else:
         logger.info("AdamW 옵티마이저를 생성합니다.")
@@ -179,7 +180,7 @@ def main():
         logging_steps=25,
 
         # auto_find_batch_size=True,
-        per_device_train_batch_size=16,
+        per_device_train_batch_size=8,
         # gradient_accumulation_steps=2,
 
 
@@ -193,7 +194,7 @@ def main():
         bf16=True,
 
 
-        # wtf, idk why this is not working,,
+        # Disabled torch_compile due to triton compatibility issues
         # torch_compile=True,
         # torch_compile_mode="reduce-overhead",  # "default", "max-autotune", "reduce-overhead"
 
@@ -226,7 +227,7 @@ def main():
     )
 
     trainer.train(
-        resume_from_checkpoint=True
+        # resume_from_checkpoint=True
         # resume_from_checkpoint="last-checkpoint" # resume from the huggingface_hub last checkpoint
     )
 

@@ -15,6 +15,8 @@ parser.add_argument("--tokenizer_id", type=str,
                     default="minpeter/tiny-ko-tokenizer-32k-250725", help="Path to tokenizer")
 parser.add_argument("--save_path", type=str,
                     default="./artifacts/prepacked", help="Path to save processed data")
+parser.add_argument("--dataset_id", type=str, default="minpeter/tiny-corpus",
+                    help="Dataset ID to load from Hugging Face Hub")
 
 args = parser.parse_args()
 
@@ -25,7 +27,7 @@ def setup_directories():
 
 def load_raw_datasets():
     print("Loading raw datasets...")
-    dataset = load_dataset("minpeter/tiny-corpus", split="train")
+    dataset = load_dataset(args.dataset_id, split="train")
     return dataset.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
 
 
