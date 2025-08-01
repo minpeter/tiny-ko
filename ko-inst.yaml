@@ -1,7 +1,7 @@
 base_model: minpeter/tiny-ko-124m-base
 
 hub_model_id: minpeter/tiny-ko-124m-sft
-output_dir: ./outputs/tiny-ko-124m-sft
+output_dir: ./output/tiny-ko-124m-sft
 wandb_project: "axolotl"
 wandb_entity: "kasfiekfs-e"
 
