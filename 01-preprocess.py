@@ -6,7 +6,7 @@ import time
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from trl import pack_dataset
-import numpy as np
+import multiprocessing
 import resource
 import re
 
@@ -32,7 +32,7 @@ def setup_directories():
 
 def load_raw_datasets():
     print("Loading raw datasets...")
-    dataset = load_dataset(args.dataset_id, split="train[:100_000]")
+    dataset = load_dataset(args.dataset_id, split="train[:1000]")
     # return dataset.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
     return dataset
 
@@ -49,51 +49,6 @@ def tokenize_function(examples):
                 tokenized_inputs["token_type_ids"][i].append(0)
 
     return tokenized_inputs
-
-
-def ascii_histogram(data, bins=10, width=50):
-    """
-    Function to draw aligned Unicode histogram in terminal
-    """
-    # use numpy for fast statistics and histogram
-    arr = np.asarray(data, dtype=float)
-    if arr.size == 0:
-        return ["No data"]
-    min_val, max_val = arr.min(), arr.max()
-    mean_val, median_val = arr.mean(), float(np.median(arr))
-    std_val = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
-    # compute histogram using numpy
-    counts, edges = np.histogram(arr, bins=bins)
-    # Trim empty bins at the edges for clearer display
-    non_zero = [i for i, c in enumerate(counts) if c > 0]
-    if non_zero:
-        first, last = non_zero[0], non_zero[-1]
-        # adjust edges and counts to include only bins with data
-        edges = edges[first:last+2]
-        counts = counts[first:last+1]
-        bins = len(counts)
-    # compute max count for histogram scaling
-    max_count = int(counts.max()) if counts.size > 0 else 1
-    # formatted output
-    range_width = 15
-    count_width = 7
-    hist_lines = []
-    # header
-    hist_lines.append(
-        f"{'Range':<{range_width}} | {'Count':>{count_width}} | Histogram")
-    hist_lines.append('-' * (range_width + 3 + count_width + 3 + width))
-    # bins
-    for i, count in enumerate(counts):
-        left = edges[i]
-        right = edges[i + 1]
-        range_str = f"{left:7.1f}-{right:7.1f}"
-        count_str = f"{count:>{count_width}d}"
-        bar = '▇' * int(count / max_count * width) if count > 0 else ''
-        hist_lines.append(f"{range_str} | {count_str} | {bar}")
-    # summary footer
-    hist_lines.append(
-        f"Min {min_val:.1f}, Max {max_val:.1f}, Mean {mean_val:.1f}, Median {median_val:.1f}, Std {std_val:.1f}")
-    return hist_lines
 
 
 if __name__ == "__main__":
@@ -119,13 +74,16 @@ if __name__ == "__main__":
     )
 
     # 1) Compute and report tokens dropped by filtering out short samples
-    total_tokens_before_filter = sum(len(ids)
-                                     for ids in tokenized_datasets["input_ids"])
-    filtered_datasets = tokenized_datasets.filter(
-        lambda x: len(x["input_ids"]) >= args.min_length
-    )
-    total_tokens_after_filter = sum(len(ids)
-                                    for ids in filtered_datasets["input_ids"])
+    # 1) Compute token lengths in parallel
+    with multiprocessing.Pool(processes=num_processors) as pool:
+        lengths = pool.map(len, tokenized_datasets["input_ids"])
+    total_tokens_before_filter = sum(lengths)
+
+    # 2) Select samples meeting min_length
+    selected_indices = [idx for idx, length in enumerate(
+        lengths) if length >= args.min_length]
+    filtered_datasets = tokenized_datasets.select(selected_indices)
+    total_tokens_after_filter = sum(lengths[idx] for idx in selected_indices)
     filter_dropped_tokens = total_tokens_before_filter - total_tokens_after_filter
     # PRINT: The filter_dropped_tokens variable is used for statistics output below.
     tokenized_datasets = filtered_datasets
@@ -221,20 +179,20 @@ if __name__ == "__main__":
     print(f"\nOriginal dataset rows: {original_rows}")
     print(f"Packed dataset rows: {packed_rows}")
 
-    # Original dataset token lengths
-    # Compute token lengths using numpy for faster iteration over large datasets
-    original_lengths = np.fromiter(
-        (len(ids) for ids in tokenized_datasets["input_ids"]), dtype=int)
-    print("\nOriginal dataset token length distribution:")
-    for line in ascii_histogram(original_lengths.tolist()):
-        print(line)
-
-    # Compute packed dataset token lengths using numpy
-    packed_lengths = np.fromiter(
-        (len(sample["input_ids"]) for sample in packed_dataset), dtype=int)
-    print("\nPacked dataset token length distribution:")
-    for line in ascii_histogram(packed_lengths):
-        print(line)
+    if packed_rows > 0:
+        # Check for any samples that do not match the expected context length
+        wrong_indices = [
+            i for i, sample in enumerate(packed_dataset)
+            if len(sample["input_ids"]) != args.context_length
+        ]
+        if wrong_indices:
+            print(
+                f"\033[1;41;97mWarning: Found {len(wrong_indices)} samples "
+                f"with incorrect length (expected {args.context_length}). "
+                f"Indices: {wrong_indices}\033[0m"
+            )
+        else:
+            print("All packed samples have the correct context length.")
 
     print(
         f"\nTotal elapsed time: {(time.time() - total_start_time)/60:.2f} minutes")
