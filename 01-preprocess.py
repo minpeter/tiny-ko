@@ -8,6 +8,7 @@ from transformers import AutoTokenizer
 from trl import pack_dataset
 import numpy as np
 import resource
+import re
 
 
 parser = argparse.ArgumentParser(description="Preprocess datasets for tiny-ko")
@@ -31,7 +32,7 @@ def setup_directories():
 
 def load_raw_datasets():
     print("Loading raw datasets...")
-    dataset = load_dataset(args.dataset_id, split="train[:10_000]")
+    dataset = load_dataset(args.dataset_id, split="train[:100_000]")
     # return dataset.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
     return dataset
 
@@ -160,7 +161,6 @@ if __name__ == "__main__":
         # Display tokens, merging runs of undecodable (replacement char) tokens
         items = sample["input_ids"]
         idx = 0
-        import re
         # \w already matches Unicode word characters (letters, digits, underscores)
         normal_pattern = re.compile(r"\w", flags=re.UNICODE)
         while idx < len(items):
