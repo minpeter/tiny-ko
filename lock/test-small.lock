@@ -3,3 +3,7 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 uv run 01-preprocess.py --context_length 8192 --tokenizer_id minpeter/tiny-ko-tokenizer-32k-250725 --save_path ./artifacts/webtext-8k --dataset_id HAERAE-HUB/KOREAN-WEBTEXT
 uv run accelerate launch 02-train.py --hf_model_id minpeter/webtext-8x-250801 --max_seq_length 8192 --dataset_path ./artifacts/webtext-8k --tokenizer_id minpeter/tiny-ko-tokenizer-32k-250725 --output_dir ./artifacts/models/webtext-8x-250801
+
+
+
+uv run 01-preprocess.py --context_length 10 --tokenizer_id minpeter/tiny-ko-tokenizer-32k-250725 --save_path ./artifacts/webtext-10 --dataset_id HAERAE-HUB/KOREAN-WEBTEXT

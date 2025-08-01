@@ -27,8 +27,9 @@ def setup_directories():
 
 def load_raw_datasets():
     print("Loading raw datasets...")
-    dataset = load_dataset(args.dataset_id, split="train")
-    return dataset.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
+    dataset = load_dataset(args.dataset_id, split="train[:10]")
+    # return dataset.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
+    return dataset
 
 
 def tokenize_function(examples):
@@ -62,11 +63,35 @@ if __name__ == "__main__":
         tokenize_function,
         batched=True,
         num_proc=num_processors,
-        remove_columns=["text"],
+        remove_columns=raw_datasets.column_names,
     )
 
     packed_dataset = pack_dataset(
         tokenized_datasets, seq_length=args.context_length, strategy="wrapped")
+
+    # >>>>>> Debugging output >>>>>>
+    SHOW_EXAMPLE_ROWS_LIMIT = 5
+
+    print(f"Packed dataset size: {len(packed_dataset)}")
+    for i in range(min(SHOW_EXAMPLE_ROWS_LIMIT, len(packed_dataset))):
+        sample = packed_dataset[i]
+        eos_id = tokenizer.eos_token_id
+
+        colored_items = []
+        for item in sample["input_ids"]:
+            # get token string for display (decode ID to actual text)
+            token_str = tokenizer.decode(
+                [item], clean_up_tokenization_spaces=False)
+            if item == eos_id:
+                # red background for EOS tokens, white text
+                colored_items.append(f'\033[41;97m{token_str}\033[0m({item})')
+            else:
+                # blue background for non-EOS tokens, white text
+                colored_items.append(f'\033[44;97m{token_str}\033[0m({item})')
+        print(
+            f"\n\033[1;43;30m[PACKED SAMPLE {i}]\033[0m {' '.join(colored_items)}")
+    # <<<<<< End of debugging output <<<<<<
+
     packed_dataset.save_to_disk(args.save_path)
 
     print(
