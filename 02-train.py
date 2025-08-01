@@ -127,6 +127,8 @@ def main():
 
     logger.info("Preprocessing 데이터셋...")
     lm_datasets = load_from_disk(args.dataset_path)
+    lm_datasets = lm_datasets.train_test_split(
+        test_size=0.001, shuffle=True, seed=5768112)
 
     print("\n로딩 완료된 데이터셋 구조:")
     print(lm_datasets)
@@ -180,8 +182,8 @@ def main():
         logging_steps=25,
 
         # auto_find_batch_size=True,
-        per_device_train_batch_size=8,
-        # gradient_accumulation_steps=2,
+        per_device_train_batch_size=16,
+        gradient_accumulation_steps=2,
 
 
         num_train_epochs=args.num_train_epochs,
@@ -194,9 +196,9 @@ def main():
         bf16=True,
 
 
-        # Disabled torch_compile due to triton compatibility issues
-        # torch_compile=True,
-        # torch_compile_mode="reduce-overhead",  # "default", "max-autotune", "reduce-overhead"
+        torch_compile=True,
+        # "default", "max-autotune", "reduce-overhead"
+        # torch_compile_mode="max-autotune",
 
         ddp_find_unused_parameters=True,
 

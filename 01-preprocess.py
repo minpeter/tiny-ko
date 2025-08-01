@@ -32,9 +32,7 @@ def setup_directories():
 
 def load_raw_datasets():
     print("Loading raw datasets...")
-    dataset = load_dataset(args.dataset_id, split="train")
-    # return dataset.train_test_split(test_size=0.001, shuffle=True, seed=5768112)
-    return dataset
+    return load_dataset(args.dataset_id, split="train")
 
 
 def tokenize_function(examples):
