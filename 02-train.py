@@ -142,9 +142,9 @@ def main():
         f"총 학습 토큰 수 (추정): {(len(lm_datasets['train']) * args.max_seq_length) / 1000**3:.2f}B tokens")
 
     # idk what is better,,
-    data_collator = DataCollatorWithFlattening(return_flash_attn_kwargs=True)
-    # data_collator = DataCollatorForLanguageModeling(
-    #     tokenizer=tokenizer, mlm=False)
+    # data_collator = DataCollatorWithFlattening(return_flash_attn_kwargs=True)
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer, mlm=False)
 
     print(lm_datasets["train"])
     print("Collated batch example:")
@@ -182,7 +182,7 @@ def main():
         logging_steps=25,
 
         # auto_find_batch_size=True,
-        per_device_train_batch_size=16,
+        per_device_train_batch_size=8,
         gradient_accumulation_steps=2,
 
 
