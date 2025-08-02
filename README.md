@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> The pre-training code included in this repo has been refactored to be more user-friendly and is now available at [🦐 minpeter/krill](https://github.com/minpeter/krill).
+
+
 # tinyko - A Tiny LLM for korean Language
 
 ## installation
